@@ -1,0 +1,277 @@
+// src/app/dashboard/cardapio/page.tsx
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { createClient } from '@/lib/supabase/client';
+
+// Tipagens
+type Ingredient = { id: string; name: string; };
+type Pizza = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+  is_available: boolean;
+  pizza_ingredients: { ingredient_id: string }[];
+};
+type Drink = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+};
+
+export default function CardapioPage() {
+  const [pizzas, setPizzas] = useState<Pizza[]>([]);
+  const [drinks, setDrinks] = useState<Drink[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Controlo separado para cada modal
+  const [isPizzaModalOpen, setIsPizzaModalOpen] = useState(false);
+  const [isDrinkModalOpen, setIsDrinkModalOpen] = useState(false);
+  
+  const [currentPizza, setCurrentPizza] = useState<Partial<Pizza> & { selectedIngredients?: string[] }>({});
+  const [currentDrink, setCurrentDrink] = useState<Partial<Drink>>({});
+  
+  const [uploading, setUploading] = useState(false);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const supabase = createClient();
+
+  // Busca todos os dados necessários
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [pizzasRes, drinksRes, ingredientsRes] = await Promise.all([
+        fetch(`${API_URL}/api/pizzas`),
+        fetch(`${API_URL}/api/drinks`),
+        fetch(`${API_URL}/api/ingredients`),
+      ]);
+      setPizzas(await pizzasRes.json());
+      setDrinks(await drinksRes.json());
+      setIngredients(await ingredientsRes.json());
+    } catch (error) {
+      console.error("Erro ao buscar dados:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_URL]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Funções para gerir os modais
+  const handleOpenPizzaModal = (item: Pizza | null = null) => {
+    if (item) {
+      setCurrentPizza({ ...item, selectedIngredients: item.pizza_ingredients.map(pi => pi.ingredient_id) });
+    } else {
+      setCurrentPizza({ name: '', description: '', price: 0, image_url: '', is_available: true, selectedIngredients: [] });
+    }
+    setIsPizzaModalOpen(true);
+  };
+
+  const handleOpenDrinkModal = (item: Drink | null = null) => {
+    setCurrentDrink(item ? { ...item } : { name: '', description: '', price: 0, image_url: '' });
+    setIsDrinkModalOpen(true);
+  };
+
+  // Upload de foto genérico
+  const handlePhotoUpload = async (file: File, type: 'pizza' | 'drink') => {
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${type}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from('produtos').upload(fileName, file);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('produtos').getPublicUrl(fileName);
+      if (type === 'pizza') {
+        setCurrentPizza(prev => ({ ...prev, image_url: data.publicUrl }));
+      } else {
+        setCurrentDrink(prev => ({ ...prev, image_url: data.publicUrl }));
+      }
+    } catch (error) {
+      alert('Erro ao fazer upload da imagem!');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // [CORRIGIDO] Função de Salvar Pizza
+  const handleSavePizza = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // 1. Cria um objeto limpo apenas com os dados que a API espera
+    const payloadForApi = {
+        name: currentPizza.name,
+        description: currentPizza.description,
+        price: currentPizza.price,
+        image_url: currentPizza.image_url,
+        is_available: currentPizza.is_available,
+        ingredient_ids: currentPizza.selectedIngredients || []
+    };
+    
+    const url = `${API_URL}/api/pizzas${currentPizza.id ? `/${currentPizza.id}` : ''}`;
+    const method = currentPizza.id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, { 
+            method, 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(payloadForApi) 
+        });
+
+        if (!response.ok) {
+            throw new Error("Falha ao salvar a pizza. Verifique os dados.");
+        }
+
+        fetchData();
+        setIsPizzaModalOpen(false);
+    } catch (error: any) {
+        alert(error.message);
+    }
+  };
+
+  const handleSaveDrink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = `${API_URL}/api/drinks${currentDrink.id ? `/${currentDrink.id}` : ''}`;
+    const method = currentDrink.id ? 'PUT' : 'POST';
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentDrink) });
+    fetchData();
+    setIsDrinkModalOpen(false);
+  };
+  
+  // Funções de Apagar
+  const handleDeletePizza = async (id: string) => {
+      if(window.confirm("Tem a certeza que quer apagar esta pizza?")) {
+          await fetch(`${API_URL}/api/pizzas/${id}`, { method: 'DELETE' });
+          fetchData();
+      }
+  }
+  const handleDeleteDrink = async (id: string) => {
+      if(window.confirm("Tem a certeza que quer apagar esta bebida?")) {
+          await fetch(`${API_URL}/api/drinks/${id}`, { method: 'DELETE' });
+          fetchData();
+      }
+  }
+
+  if (loading) return <p>A carregar cardápio...</p>;
+
+  return (
+    <div>
+      <div className="flex overflow-y-auto justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Gestão de Cardápio</h1>
+        <div className="flex space-x-2">
+            <button onClick={() => handleOpenPizzaModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Pizza</button>
+            <button onClick={() => handleOpenDrinkModal()} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">+ Adicionar Bebida</button>
+        </div>
+      </div>
+
+      {/* Secção de Pizzas */}
+      <section className="mb-12">
+        <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Pizzas</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {pizzas.map(pizza => (
+            <div key={pizza.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <img src={pizza.image_url || 'https://placehold.co/600x400?text=Pizza'} alt={pizza.name} className="w-full h-48 object-cover" />
+              <div className="p-4">
+                <h3 className="text-xl font-bold">{pizza.name}</h3>
+                <p className="text-gray-600 text-sm mb-2 h-10 overflow-hidden">{pizza.description}</p>
+                <p className="text-lg font-semibold text-green-600">R$ {pizza.price.toFixed(2)}</p>
+                <div className="mt-4 flex justify-end space-x-2">
+                  <button onClick={() => handleOpenPizzaModal(pizza)} className="text-sm text-blue-600">Editar</button>
+                  <button onClick={() => handleDeletePizza(pizza.id)} className="text-sm text-red-600">Apagar</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Secção de Bebidas */}
+      <section>
+        <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Bebidas</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {drinks.map(drink => (
+            <div key={drink.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <img src={drink.image_url || 'https://placehold.co/600x600?text=Bebida'} alt={drink.name} className="w-full h-48 object-cover" />
+              <div className="p-4">
+                <h3 className="text-xl font-bold">{drink.name}</h3>
+                <p className="text-lg font-semibold text-green-600">R$ {drink.price.toFixed(2)}</p>
+                <div className="mt-4 flex justify-end space-x-2">
+                  <button onClick={() => handleOpenDrinkModal(drink)} className="text-sm text-blue-600">Editar</button>
+                  <button onClick={() => handleDeleteDrink(drink.id)} className="text-sm text-red-600">Apagar</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Modal para Adicionar/Editar Pizza */}
+      {isPizzaModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4">
+          <form onSubmit={handleSavePizza} className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <h2 className="text-2xl font-bold mb-4">{currentPizza.id ? 'Editar' : 'Adicionar'} Pizza</h2>
+            <input type="text" placeholder="Nome da Pizza" value={currentPizza.name || ''} onChange={e => setCurrentPizza({...currentPizza, name: e.target.value})} className="w-full p-2 border rounded" required />
+            <textarea placeholder="Descrição" value={currentPizza.description || ''} onChange={e => setCurrentPizza({...currentPizza, description: e.target.value})} className="w-full p-2 border rounded" required />
+            <input type="number" placeholder="Preço" step="0.01" value={currentPizza.price || ''} onChange={e => setCurrentPizza({...currentPizza, price: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" required />
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Foto da Pizza</label>
+                <input type="file" accept="image/*" onChange={e => e.target.files && handlePhotoUpload(e.target.files[0], 'pizza')} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                {uploading && <p>A carregar foto...</p>}
+                {currentPizza.image_url && <img src={currentPizza.image_url} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />}
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700">Ingredientes</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2 max-h-40 overflow-y-auto p-2 border rounded">
+                  {ingredients.map(ing => (
+                    <label key={ing.id} className="flex items-center space-x-2">
+                      <input type="checkbox" checked={currentPizza.selectedIngredients?.includes(ing.id)} 
+                        onChange={e => {
+                          const selected = currentPizza.selectedIngredients || [];
+                          const newSelected = e.target.checked ? [...selected, ing.id] : selected.filter(id => id !== ing.id);
+                          setCurrentPizza({...currentPizza, selectedIngredients: newSelected});
+                        }}
+                      />
+                      <span>{ing.name}</span>
+                    </label>
+                  ))}
+                </div>
+            </div>
+            <div className="flex justify-end space-x-3 pt-4">
+                <button type="button" onClick={() => setIsPizzaModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded" disabled={uploading}>Salvar Pizza</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modal para Adicionar/Editar Bebida */}
+      {isDrinkModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4">
+            <form onSubmit={handleSaveDrink} className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
+                <h2 className="text-2xl font-bold mb-4">{currentDrink.id ? 'Editar' : 'Adicionar'} Bebida</h2>
+                <input type="text" placeholder="Nome da Bebida" value={currentDrink.name || ''} onChange={e => setCurrentDrink({...currentDrink, name: e.target.value})} className="w-full p-2 border rounded" required />
+                <textarea placeholder="Descrição" value={currentDrink.description || ''} onChange={e => setCurrentDrink({...currentDrink, description: e.target.value})} className="w-full p-2 border rounded" />
+                <input type="number" placeholder="Preço" step="0.01" value={currentDrink.price || ''} onChange={e => setCurrentDrink({...currentDrink, price: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" required />
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Foto da Bebida</label>
+                    <input type="file" accept="image/*" onChange={e => e.target.files && handlePhotoUpload(e.target.files[0], 'drink')} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                    {uploading && <p>A carregar foto...</p>}
+                    {currentDrink.image_url && <img src={currentDrink.image_url} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />}
+                </div>
+                <div className="flex justify-end space-x-3 pt-4">
+                    <button type="button" onClick={() => setIsDrinkModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded" disabled={uploading}>Salvar Bebida</button>
+                </div>
+            </form>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,32 @@
+{
+      "name": "painel-admin",
+      "version": "0.1.0",
+      "private": true,
+      "scripts": {
+            "dev": "next dev",
+            "build": "next build",
+            "start": "next start",
+            "lint": "next lint"
+      },
+      "dependencies": {
+            "@supabase/auth-helpers-nextjs": "^0.10.0",
+            "@supabase/auth-ui-react": "^0.4.7",
+            "@supabase/auth-ui-shared": "^0.1.8",
+            "@supabase/supabase-js": "^2.50.5",
+            "next": "15.3.5",
+            "react": "^19.0.0",
+            "react-dom": "^19.0.0"
+      },
+      "devDependencies": {
+            "@types/node": "^20",
+            "@types/react": "^19",
+            "@types/react-dom": "^19",
+            "@types/web-bluetooth": "^0.0.21",
+            "autoprefixer": "^10.4.19",
+            "eslint": "^9",
+            "eslint-config-next": "15.3.5",
+            "postcss": "^8.4.38",
+            "tailwindcss": "^3.4.4",
+            "typescript": "^5"
+      }
+}
