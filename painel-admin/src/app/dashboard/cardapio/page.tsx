@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Image from 'next/image'; // Importa o componente de Imagem
 
 // Tipagens
 type Ingredient = { id: string; name: string; };
@@ -28,7 +29,7 @@ export default function CardapioPage() {
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); // [NOVO] Estado para guardar erros
+  const [error, setError] = useState<string | null>(null);
   
   const [isPizzaModalOpen, setIsPizzaModalOpen] = useState(false);
   const [isDrinkModalOpen, setIsDrinkModalOpen] = useState(false);
@@ -41,28 +42,25 @@ export default function CardapioPage() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   const supabase = createClient();
 
-  // Busca todos os dados necessários
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setError(null); // Limpa erros anteriores
+    setError(null);
     try {
       const [pizzasRes, drinksRes, ingredientsRes] = await Promise.all([
         fetch(`${API_URL}/api/pizzas`),
         fetch(`${API_URL}/api/drinks`),
         fetch(`${API_URL}/api/ingredients`),
       ]);
-
       if (!pizzasRes.ok || !drinksRes.ok || !ingredientsRes.ok) {
         throw new Error('Falha ao comunicar com a API para carregar o cardápio.');
       }
-
       setPizzas(await pizzasRes.json());
       setDrinks(await drinksRes.json());
       setIngredients(await ingredientsRes.json());
-    } catch (err: unknown) { // [MODIFICADO] A variável de erro agora é 'err' e o tipo é 'unknown'
+    } catch (err: unknown) {
       if (err instanceof Error) {
         console.error("Erro ao buscar dados:", err);
-        setError(err.message); // [MODIFICADO] Guarda a mensagem de erro no estado
+        setError(err.message);
       }
     } finally {
       setLoading(false);
@@ -73,7 +71,6 @@ export default function CardapioPage() {
     fetchData();
   }, [fetchData]);
 
-  // Funções para gerir os modais
   const handleOpenPizzaModal = (item: Pizza | null = null) => {
     if (item) {
       setCurrentPizza({ ...item, selectedIngredients: item.pizza_ingredients.map(pi => pi.ingredient_id) });
@@ -88,7 +85,6 @@ export default function CardapioPage() {
     setIsDrinkModalOpen(true);
   };
 
-  // Upload de foto genérico
   const handlePhotoUpload = async (file: File, type: 'pizza' | 'drink') => {
     setUploading(true);
     try {
@@ -103,14 +99,14 @@ export default function CardapioPage() {
       } else {
         setCurrentDrink(prev => ({ ...prev, image_url: data.publicUrl }));
       }
-    } catch (err: unknown) {
+    } catch (err: unknown) { // [CORRIGIDO]
+      console.error(err);
       alert('Erro ao fazer upload da imagem!');
     } finally {
       setUploading(false);
     }
   };
 
-  // Funções de Salvar
   const handleSavePizza = async (e: React.FormEvent) => {
     e.preventDefault();
     const payloadForApi = {
@@ -123,22 +119,9 @@ export default function CardapioPage() {
     };
     const url = `${API_URL}/api/pizzas${currentPizza.id ? `/${currentPizza.id}` : ''}`;
     const method = currentPizza.id ? 'PUT' : 'POST';
-    try {
-        const response = await fetch(url, { 
-            method, 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(payloadForApi) 
-        });
-        if (!response.ok) {
-            throw new Error("Falha ao salvar a pizza. Verifique os dados.");
-        }
-        fetchData();
-        setIsPizzaModalOpen(false);
-    } catch (err: unknown) {
-        if (err instanceof Error) {
-            alert(err.message);
-        }
-    }
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadForApi) });
+    fetchData();
+    setIsPizzaModalOpen(false);
   };
 
   const handleSaveDrink = async (e: React.FormEvent) => {
@@ -150,7 +133,6 @@ export default function CardapioPage() {
     setIsDrinkModalOpen(false);
   };
   
-  // Funções de Apagar
   const handleDeletePizza = async (id: string) => {
       if(window.confirm("Tem a certeza que quer apagar esta pizza?")) {
           await fetch(`${API_URL}/api/pizzas/${id}`, { method: 'DELETE' });
@@ -169,7 +151,7 @@ export default function CardapioPage() {
 
   return (
     <div>
-      <div className="flex overflow-y-auto justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Gestão de Cardápio</h1>
         <div className="flex space-x-2">
             <button onClick={() => handleOpenPizzaModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Pizza</button>
@@ -177,13 +159,12 @@ export default function CardapioPage() {
         </div>
       </div>
 
-      {/* Secção de Pizzas */}
       <section className="mb-12">
         <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Pizzas</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pizzas.map(pizza => (
             <div key={pizza.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <img src={pizza.image_url || 'https://placehold.co/600x400?text=Pizza'} alt={pizza.name} className="w-full h-48 object-cover" />
+              <Image src={pizza.image_url || 'https://placehold.co/600x400?text=Pizza'} alt={pizza.name} width={600} height={400} className="w-full h-48 object-cover" />
               <div className="p-4">
                 <h3 className="text-xl font-bold">{pizza.name}</h3>
                 <p className="text-gray-600 text-sm mb-2 h-10 overflow-hidden">{pizza.description}</p>
@@ -198,13 +179,12 @@ export default function CardapioPage() {
         </div>
       </section>
 
-      {/* Secção de Bebidas */}
       <section>
         <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Bebidas</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {drinks.map(drink => (
             <div key={drink.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <img src={drink.image_url || 'https://placehold.co/600x600?text=Bebida'} alt={drink.name} className="w-full h-48 object-cover" />
+              <Image src={drink.image_url || 'https://placehold.co/600x600?text=Bebida'} alt={drink.name} width={600} height={600} className="w-full h-48 object-cover" />
               <div className="p-4">
                 <h3 className="text-xl font-bold">{drink.name}</h3>
                 <p className="text-lg font-semibold text-green-600">R$ {drink.price.toFixed(2)}</p>
@@ -218,7 +198,6 @@ export default function CardapioPage() {
         </div>
       </section>
 
-      {/* Modal para Adicionar/Editar Pizza */}
       {isPizzaModalOpen && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4">
           <form onSubmit={handleSavePizza} className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
@@ -230,7 +209,7 @@ export default function CardapioPage() {
                 <label className="block text-sm font-medium text-gray-700">Foto da Pizza</label>
                 <input type="file" accept="image/*" onChange={e => e.target.files && handlePhotoUpload(e.target.files[0], 'pizza')} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
                 {uploading && <p>A carregar foto...</p>}
-                {currentPizza.image_url && <img src={currentPizza.image_url} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />}
+                {currentPizza.image_url && <Image src={currentPizza.image_url} alt="Preview" width={128} height={128} className="mt-2 w-32 h-32 object-cover rounded" />}
             </div>
             <div>
                 <label className="block text-sm font-medium text-gray-700">Ingredientes</label>
@@ -257,7 +236,6 @@ export default function CardapioPage() {
         </div>
       )}
 
-      {/* Modal para Adicionar/Editar Bebida */}
       {isDrinkModalOpen && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4">
             <form onSubmit={handleSaveDrink} className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
@@ -269,7 +247,7 @@ export default function CardapioPage() {
                     <label className="block text-sm font-medium text-gray-700">Foto da Bebida</label>
                     <input type="file" accept="image/*" onChange={e => e.target.files && handlePhotoUpload(e.target.files[0], 'drink')} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
                     {uploading && <p>A carregar foto...</p>}
-                    {currentDrink.image_url && <img src={currentDrink.image_url} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />}
+                    {currentDrink.image_url && <Image src={currentDrink.image_url} alt="Preview" width={128} height={128} className="mt-2 w-32 h-32 object-cover rounded" />}
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
                     <button type="button" onClick={() => setIsDrinkModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
