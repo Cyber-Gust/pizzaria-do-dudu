@@ -25,6 +25,7 @@ export interface Extra {
   }
 }
 
+
 export interface OperatingHour {
   day_of_week: number;
   day_name: string;
@@ -111,11 +112,21 @@ export interface Coupon {
  */
 export const getPizzeriaStatus = async (): Promise<PizzeriaStatus | null> => {
   try {
-    const response = await apiClient.get('/status');
-    return response.data;
+    // Usamos a API 'fetch' nativa para aproveitar o cache do Next.js/Vercel
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/status`, {
+      next: {
+        revalidate: 60, // Diz à Vercel para revalidar (buscar novamente) estes dados a cada 60 segundos
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Falha ao buscar o status da pizzaria');
+    }
+
+    return response.json();
   } catch (error) {
     console.error("Erro ao buscar status da pizzaria:", error);
-    return null; // Retorna null para que o frontend possa lidar com o erro
+    return null;
   }
 };
 
