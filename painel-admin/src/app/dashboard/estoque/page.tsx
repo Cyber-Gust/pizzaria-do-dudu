@@ -45,12 +45,14 @@ export default function EstoquePage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'ingredient' | 'drink' | null>(null);
-  const [currentItem, setCurrentItem] = useState<any>(null);
+  // [CORRIGIDO] Usado um tipo de união mais específico em vez de 'any'
+  const [currentItem, setCurrentItem] = useState<Partial<Ingredient & Drink> | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [ingredientsRes, drinksRes] = await Promise.all([
         fetch(`${API_URL}/api/ingredients`),
@@ -63,8 +65,12 @@ export default function EstoquePage() {
       
       setIngredients(ingredientsData);
       setDrinks(drinksData);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) { // [CORRIGIDO] Usado 'unknown' em vez de 'any' para segurança de tipo
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Ocorreu um erro desconhecido.");
+      }
     } finally {
       setLoading(false);
     }
@@ -74,9 +80,9 @@ export default function EstoquePage() {
     fetchData();
   }, [fetchData]);
 
-  const handleOpenModal = (type: 'ingredient' | 'drink', item: any | null = null) => {
+  const handleOpenModal = (type: 'ingredient' | 'drink', item: Ingredient | Drink | null = null) => {
     setModalType(type);
-    setCurrentItem(item ? { ...item } : { is_available: true }); // Itens novos começam como disponíveis
+    setCurrentItem(item ? { ...item } : { is_available: true });
     setIsModalOpen(true);
   };
 
@@ -88,6 +94,7 @@ export default function EstoquePage() {
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!currentItem) return;
     const url = `${API_URL}/api/${modalType}s${currentItem.id ? `/${currentItem.id}` : ''}`;
     const method = currentItem.id ? 'PUT' : 'POST';
 
@@ -101,13 +108,15 @@ export default function EstoquePage() {
       
       fetchData();
       handleCloseModal();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        alert(err.message);
+      }
     }
   };
   
   // Função para alterar a disponibilidade
-  const handleToggleAvailability = async (type: 'ingredient' | 'drink', item: any) => {
+  const handleToggleAvailability = async (type: 'ingredient' | 'drink', item: Ingredient | Drink) => {
     const updatedItem = { ...item, is_available: !item.is_available };
     const url = `${API_URL}/api/${type}s/${item.id}`;
 
@@ -119,27 +128,30 @@ export default function EstoquePage() {
       });
       if (!response.ok) throw new Error(`Falha ao atualizar disponibilidade.`);
       
-      fetchData(); // Recarrega os dados para mostrar a mudança
-    } catch (err: any) {
-      alert(err.message);
+      fetchData();
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        alert(err.message);
+      }
     }
   };
 
-  // [NOVO] Função para apagar um item permanentemente
+  // Função para apagar um item permanentemente
   const handleDelete = async (type: 'ingredient' | 'drink', id: string) => {
     if (!window.confirm(`Tem a certeza que quer apagar este ${type} permanentemente? Esta ação não pode ser desfeita.`)) return;
 
     try {
       const response = await fetch(`${API_URL}/api/${type}s/${id}`, { method: 'DELETE' });
       if (!response.ok) {
-        // Tenta ler a mensagem de erro da API, se houver
         const errorData = await response.json().catch(() => null);
         throw new Error(errorData?.error || `Falha ao apagar ${type}.`);
       }
       
-      fetchData(); // Recarrega os dados
-    } catch (err: any) {
-      alert(err.message);
+      fetchData();
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        alert(err.message);
+      }
     }
   };
 
@@ -157,9 +169,9 @@ export default function EstoquePage() {
           <h2 className="text-xl font-semibold text-gray-800">Ingredientes</h2>
           <button onClick={() => handleOpenModal('ingredient')} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">Adicionar Ingrediente</button>
         </div>
-        <div className="ax-h-[40vh] overflow-y-auto">
+        <div className="max-h-[40vh] overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
-            <thead><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disponível</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantidade</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unidade</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th></tr></thead>
+            <thead className="bg-gray-50 sticky top-0"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disponível</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantidade</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unidade</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th></tr></thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {ingredients.map(item => (
                 <tr key={item.id} className={!item.is_available ? 'bg-gray-100 text-gray-400' : ''}>
@@ -169,7 +181,6 @@ export default function EstoquePage() {
                     <td className="px-6 py-4 whitespace-nowrap">{item.unit}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                       <button onClick={() => handleOpenModal('ingredient', item)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
-                      {/* [NOVO] Botão de Apagar */}
                       <button onClick={() => handleDelete('ingredient', item.id)} className="text-red-600 hover:text-red-900">Apagar</button>
                     </td>
                 </tr>
@@ -185,9 +196,9 @@ export default function EstoquePage() {
           <h2 className="text-xl font-semibold text-gray-800">Bebidas</h2>
           <button onClick={() => handleOpenModal('drink')} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">Adicionar Bebida</button>
         </div>
-        <div className="ax-h-[40vh] overflow-y-auto">
+        <div className="max-h-[40vh] overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
-            <thead><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disponível</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preço</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantidade</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th></tr></thead>
+            <thead className="bg-gray-50 sticky top-0"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disponível</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preço</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantidade</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th></tr></thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {drinks.map(item => (
                 <tr key={item.id} className={!item.is_available ? 'bg-gray-100 text-gray-400' : ''}>
@@ -197,7 +208,6 @@ export default function EstoquePage() {
                     <td className="px-6 py-4 whitespace-nowrap">{item.stock_quantity}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                       <button onClick={() => handleOpenModal('drink', item)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
-                      {/* [NOVO] Botão de Apagar */}
                       <button onClick={() => handleDelete('drink', item.id)} className="text-red-600 hover:text-red-900">Apagar</button>
                     </td>
                 </tr>
@@ -208,7 +218,7 @@ export default function EstoquePage() {
       </div>
 
       {/* Modal para Adicionar/Editar */}
-      {isModalOpen && (
+      {isModalOpen && currentItem && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
           <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
             <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
@@ -217,8 +227,8 @@ export default function EstoquePage() {
             <form onSubmit={handleSave}>
               <div className="space-y-4">
                 <input type="text" placeholder="Nome" value={currentItem.name || ''} onChange={e => setCurrentItem({...currentItem, name: e.target.value})} className="w-full p-2 border rounded" required />
-                {modalType === 'drink' && <input type="number" placeholder="Preço" step="0.01" value={currentItem.price || ''} onChange={e => setCurrentItem({...currentItem, price: parseFloat(e.target.value)})} className="w-full p-2 border rounded" required />}
-                <input type="number" placeholder="Quantidade em Estoque" value={currentItem.stock_quantity || ''} onChange={e => setCurrentItem({...currentItem, stock_quantity: parseInt(e.target.value)})} className="w-full p-2 border rounded" required />
+                {modalType === 'drink' && <input type="number" placeholder="Preço" step="0.01" value={currentItem.price || ''} onChange={e => setCurrentItem({...currentItem, price: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" required />}
+                <input type="number" placeholder="Quantidade em Estoque" value={currentItem.stock_quantity || ''} onChange={e => setCurrentItem({...currentItem, stock_quantity: parseInt(e.target.value) || 0})} className="w-full p-2 border rounded" required />
                 {modalType === 'ingredient' && <input type="text" placeholder="Unidade (ex: g, kg, un)" value={currentItem.unit || ''} onChange={e => setCurrentItem({...currentItem, unit: e.target.value})} className="w-full p-2 border rounded" required />}
               </div>
               <div className="mt-6 flex justify-end space-x-2">

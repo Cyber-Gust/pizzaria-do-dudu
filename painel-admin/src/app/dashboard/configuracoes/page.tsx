@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 
 // Tipagens
 type Motoboy = { id: string; name: string; whatsapp_number: string; is_active: boolean; };
+type Ingredient = { id: string; name: string; };
 type Extra = { id: string; price: number; is_available: boolean; ingredients: { id: string; name: string } };
 type DeliveryFee = { id: string; neighborhood_name: string; fee_amount: number; };
 type Coupon = { id: string; code: string; discount_type: 'fixed' | 'percentage'; discount_value: number; is_active: boolean; };
@@ -15,7 +16,6 @@ type OperatingHour = {
   open_time: string | null;
   close_time: string | null;
 };
-type Ingredient = { id: string; name: string; };
 
 const ToggleSwitch = ({ checked, onChange }: { checked: boolean, onChange: () => void }) => (
   <button onClick={onChange} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 focus:outline-none ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
@@ -76,9 +76,11 @@ export default function ConfiguracoesPage() {
       setCoupons(couponsData || []);
       setOperatingHours(hoursData || []);
 
-    } catch (err: any) {
-      console.error("Erro ao buscar dados:", err);
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Erro ao buscar dados:", err);
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -165,7 +167,7 @@ export default function ConfiguracoesPage() {
               })
           ));
           alert('Horários de funcionamento salvos com sucesso!');
-      } catch (error) {
+      } catch (err) {
           alert('Erro ao salvar os horários.');
       } finally {
           setLoading(false);
@@ -214,7 +216,7 @@ export default function ConfiguracoesPage() {
     await fetch(`${API_URL}/api/coupons/${coupon.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedCoupon) });
     fetchData();
   };
-  const handleHourChange = (dayIndex: number, field: keyof OperatingHour, value: any) => {
+  const handleHourChange = (dayIndex: number, field: keyof OperatingHour, value: string | boolean) => {
       const updatedHours = [...operatingHours];
       updatedHours[dayIndex] = { ...updatedHours[dayIndex], [field]: value };
       setOperatingHours(updatedHours);
@@ -236,7 +238,7 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
         <div className="space-y-4">
-          {operatingHours && operatingHours.map((day, index) => (
+          {operatingHours.map((day, index) => (
             <div key={day.day_of_week} className="grid grid-cols-1 sm:grid-cols-4 items-center gap-4 p-2 border-b">
               <span className="font-semibold col-span-1">{day.day_name}</span>
               <div className="col-span-1 flex items-center space-x-2">
@@ -335,7 +337,7 @@ export default function ConfiguracoesPage() {
       </div>
 
       {/* Secção de Gestão de Taxas de Entrega */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800">Taxas de Entrega por Bairro</h2>
           <button onClick={() => handleOpenFeeModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Taxa</button>
@@ -364,8 +366,8 @@ export default function ConfiguracoesPage() {
           </table>
         </div>
       </div>
-
-      {/* [NOVO] Secção de Gestão de Cupões de Desconto */}
+      
+      {/* Secção de Gestão de Cupões de Desconto */}
       <div className="bg-white p-6 rounded-lg shadow-md mt-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-800">Cupões de Desconto</h2>
@@ -400,7 +402,7 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
 
-      {/* Modais (Motoboy, Extra, Taxa) */}
+      {/* Modais */}
       {isMotoboyModalOpen && currentMotoboy && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center">
           <form onSubmit={handleSaveMotoboy} className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
@@ -460,6 +462,31 @@ export default function ConfiguracoesPage() {
         </div>
       )}
 
+      {isCouponModalOpen && currentCoupon && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center">
+          <form onSubmit={handleSaveCoupon} className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-lg font-medium">{currentCoupon.id ? 'Editar' : 'Adicionar'} Cupão</h3>
+            <input type="text" placeholder="Código do Cupão (ex: PIZZA10)" value={currentCoupon.code || ''} onChange={e => setCurrentCoupon({...currentCoupon, code: e.target.value.toUpperCase()})} className="w-full p-2 border rounded" required />
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700">Tipo de Desconto</label>
+                <select value={currentCoupon.discount_type || 'fixed'} onChange={e => setCurrentCoupon({...currentCoupon, discount_type: e.target.value as 'fixed' | 'percentage'})} className="w-full p-2 border rounded mt-1">
+                  <option value="fixed">Valor Fixo (R$)</option>
+                  <option value="percentage">Percentagem (%)</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700">Valor</label>
+                <input type="number" placeholder="Valor" step="0.01" value={currentCoupon.discount_value || 0} onChange={e => setCurrentCoupon({...currentCoupon, discount_value: parseFloat(e.target.value)})} className="w-full p-2 border rounded mt-1" required />
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2 pt-4">
+              <button type="button" onClick={() => setIsCouponModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
+              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Salvar</button>
+            </div>
+          </form>
+        </div>
+      )}
       
     </div>
   );

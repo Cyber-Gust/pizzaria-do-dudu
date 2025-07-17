@@ -45,8 +45,12 @@ export default function FinanceiroPage() {
             if (!response.ok) throw new Error('Falha ao carregar dados financeiros.');
             const data: Transaction[] = await response.json();
             setTransactions(data);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) { // [CORRIGIDO]
+            if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError("Ocorreu um erro desconhecido.");
+            }
         } finally {
             setLoading(false);
         }
@@ -89,8 +93,10 @@ export default function FinanceiroPage() {
             setNewExpense({ description: '', amount: '' });
             setIsModalOpen(false);
             fetchCashFlow(startDate, endDate); // Recarrega os dados do período atual
-        } catch (err: any) {
-            alert(err.message);
+        } catch (err: unknown) { // [CORRIGIDO]
+            if (err instanceof Error) {
+                alert(err.message);
+            }
         }
     };
 

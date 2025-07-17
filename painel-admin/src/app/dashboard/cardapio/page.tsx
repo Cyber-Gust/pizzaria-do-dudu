@@ -28,8 +28,8 @@ export default function CardapioPage() {
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // [NOVO] Estado para guardar erros
   
-  // Controlo separado para cada modal
   const [isPizzaModalOpen, setIsPizzaModalOpen] = useState(false);
   const [isDrinkModalOpen, setIsDrinkModalOpen] = useState(false);
   
@@ -44,17 +44,26 @@ export default function CardapioPage() {
   // Busca todos os dados necessários
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null); // Limpa erros anteriores
     try {
       const [pizzasRes, drinksRes, ingredientsRes] = await Promise.all([
         fetch(`${API_URL}/api/pizzas`),
         fetch(`${API_URL}/api/drinks`),
         fetch(`${API_URL}/api/ingredients`),
       ]);
+
+      if (!pizzasRes.ok || !drinksRes.ok || !ingredientsRes.ok) {
+        throw new Error('Falha ao comunicar com a API para carregar o cardápio.');
+      }
+
       setPizzas(await pizzasRes.json());
       setDrinks(await drinksRes.json());
       setIngredients(await ingredientsRes.json());
-    } catch (error) {
-      console.error("Erro ao buscar dados:", error);
+    } catch (err: unknown) { // [MODIFICADO] A variável de erro agora é 'err' e o tipo é 'unknown'
+      if (err instanceof Error) {
+        console.error("Erro ao buscar dados:", err);
+        setError(err.message); // [MODIFICADO] Guarda a mensagem de erro no estado
+      }
     } finally {
       setLoading(false);
     }
@@ -94,18 +103,16 @@ export default function CardapioPage() {
       } else {
         setCurrentDrink(prev => ({ ...prev, image_url: data.publicUrl }));
       }
-    } catch (error) {
+    } catch (err: unknown) {
       alert('Erro ao fazer upload da imagem!');
     } finally {
       setUploading(false);
     }
   };
 
-  // [CORRIGIDO] Função de Salvar Pizza
+  // Funções de Salvar
   const handleSavePizza = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // 1. Cria um objeto limpo apenas com os dados que a API espera
     const payloadForApi = {
         name: currentPizza.name,
         description: currentPizza.description,
@@ -114,25 +121,23 @@ export default function CardapioPage() {
         is_available: currentPizza.is_available,
         ingredient_ids: currentPizza.selectedIngredients || []
     };
-    
     const url = `${API_URL}/api/pizzas${currentPizza.id ? `/${currentPizza.id}` : ''}`;
     const method = currentPizza.id ? 'PUT' : 'POST';
-
     try {
         const response = await fetch(url, { 
             method, 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify(payloadForApi) 
         });
-
         if (!response.ok) {
             throw new Error("Falha ao salvar a pizza. Verifique os dados.");
         }
-
         fetchData();
         setIsPizzaModalOpen(false);
-    } catch (error: any) {
-        alert(error.message);
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            alert(err.message);
+        }
     }
   };
 
@@ -160,6 +165,7 @@ export default function CardapioPage() {
   }
 
   if (loading) return <p>A carregar cardápio...</p>;
+  if (error) return <p className="text-red-500 bg-red-100 p-4 rounded-lg">Erro: {error}</p>;
 
   return (
     <div>

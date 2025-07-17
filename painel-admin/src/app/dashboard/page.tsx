@@ -16,7 +16,6 @@ export default function DashboardHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Estados para os campos de input dos tempos
   const [pickupTime, setPickupTime] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('');
 
@@ -24,16 +23,18 @@ export default function DashboardHomePage() {
 
   const fetchPizzeriaStatus = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`${API_URL}/api/status`);
       if (!response.ok) throw new Error('Falha ao carregar status.');
       const data: PizzeriaStatus = await response.json();
       setStatus(data);
-      // Popula os campos de input com os valores do banco de dados
       setPickupTime(data.pickup_time_minutes.toString());
       setDeliveryTime(data.delivery_time_minutes.toString());
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -50,17 +51,18 @@ export default function DashboardHomePage() {
       const response = await fetch(`${API_URL}/api/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_open: !status.is_open }), // Envia apenas o campo a ser alterado
+        body: JSON.stringify({ is_open: !status.is_open }),
       });
       if (!response.ok) throw new Error('Falha ao atualizar status.');
-      await fetchPizzeriaStatus(); // Recarrega todos os dados
-    } catch (err: any) {
-      setError(err.message);
+      await fetchPizzeriaStatus();
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        setError(err.message);
+      }
       setLoading(false);
     }
   };
 
-  // Nova função para salvar os tempos
   const handleSaveTimes = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -75,9 +77,11 @@ export default function DashboardHomePage() {
       });
       if (!response.ok) throw new Error('Falha ao salvar os tempos.');
       await fetchPizzeriaStatus();
-      alert('Tempos atualizados com sucesso!'); // Feedback simples para o usuário
-    } catch (err: any) {
-      setError(err.message);
+      alert('Tempos atualizados com sucesso!');
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -87,10 +91,10 @@ export default function DashboardHomePage() {
     <div>
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard</h1>
       
-      {/* Card de Controle da Pizzaria */}
+      {error && <p className="text-red-500 mb-4 bg-red-100 p-4 rounded-lg">Erro: {error}</p>}
+      
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Controle da Pizzaria</h2>
-        {error && <p className="text-red-500 mb-4">{error}</p>}
         <div className="flex items-center space-x-4">
           <button
             onClick={handleToggleStatus}
@@ -98,7 +102,7 @@ export default function DashboardHomePage() {
             className={`px-6 py-3 font-bold text-white rounded-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed
               ${status?.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
           >
-            {loading ? 'Carregando...' : (status?.is_open ? 'FECHAR PIZZARIA' : 'ABRIR PIZZARIA')}
+            {loading && !status ? 'A carregar...' : (status?.is_open ? 'FECHAR PIZZARIA' : 'ABRIR PIZZARIA')}
           </button>
           <div className="flex items-center space-x-2">
             <div className={`w-4 h-4 rounded-full ${status?.is_open ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
@@ -109,7 +113,6 @@ export default function DashboardHomePage() {
         </div>
       </div>
 
-      {/* [NOVO] Card de Configurações de Tempo */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Configurações de Tempo</h2>
         <form onSubmit={handleSaveTimes} className="space-y-4">
@@ -147,7 +150,7 @@ export default function DashboardHomePage() {
               disabled={loading}
               className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Salvando...' : 'Salvar Tempos'}
+              {loading ? 'A salvar...' : 'Salvar Tempos'}
             </button>
           </div>
         </form>

@@ -5,7 +5,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 // Tipagens
-type OrderItem = { item_name: string; quantity: number; price_per_item: number; selected_extras?: any[] };
+type ExtraItem = { id: string; name: string; price: number };
+type OrderItem = { item_name: string; quantity: number; price_per_item: number; selected_extras?: ExtraItem[] };
 type Order = {
   id: number;
   customer_name: string;
@@ -26,7 +27,7 @@ type NewOrderItem = {
     quantity: number;
     price_per_item: number;
     item_type: 'pizza' | 'drink';
-    extras: { id: string; name: string; price: number }[];
+    extras: ExtraItem[];
 };
 
 const initialNewOrderState = {
@@ -60,6 +61,7 @@ export default function PedidosPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [ordersRes, motoboysRes, pizzasRes, drinksRes, extrasRes] = await Promise.all([
         fetch(`${API_URL}/api/orders`),
@@ -72,13 +74,15 @@ export default function PedidosPage() {
       
       setOrders(await ordersRes.json());
       setMotoboys(await motoboysRes.json());
-      const pizzasData = (await pizzasRes.json()).map((p: any) => ({ ...p, item_type: 'pizza' }));
-      const drinksData = (await drinksRes.json()).map((d: any) => ({ ...d, item_type: 'drink' }));
+      const pizzasData = (await pizzasRes.json()).map((p: Product) => ({ ...p, item_type: 'pizza' as const }));
+      const drinksData = (await drinksRes.json()).map((d: Product) => ({ ...d, item_type: 'drink' as const }));
       setProducts([...pizzasData, ...drinksData]);
       setExtras(await extrasRes.json());
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -101,7 +105,6 @@ export default function PedidosPage() {
     (order.order_items || []).forEach(item => {
         const itemTotal = (item.quantity * item.price_per_item).toFixed(2);
         receipt += `${item.quantity}x ${item.item_name.padEnd(18)} R$${itemTotal.padStart(6)}\n`;
-        // Imprime os adicionais
         if (item.selected_extras && item.selected_extras.length > 0) {
             item.selected_extras.forEach(extra => {
                 receipt += `  + ${extra.name}\n`;
@@ -130,7 +133,7 @@ export default function PedidosPage() {
         alert('Erro ao enviar pedido para a impressora. Tente reconectar.');
         setIsConnected(false);
     }
-  }, [isConnected, printerCharacteristic]);
+  }, [isConnected, printerCharacteristic, formatOrderForPrinting]);
 
   useEffect(() => {
     const channel = supabase
@@ -166,6 +169,7 @@ export default function PedidosPage() {
         setIsConnected(true);
       }
     } catch (err) {
+      console.error("Falha ao conectar à impressora:", err);
       alert('Não foi possível conectar à impressora.');
     } finally {
       setIsConnecting(false);
@@ -186,6 +190,7 @@ export default function PedidosPage() {
         body: JSON.stringify(body),
       });
     } catch (err) {
+      console.error("Falha ao atualizar status:", err);
       fetchData();
     }
   };
@@ -257,11 +262,14 @@ export default function PedidosPage() {
         setNewOrderData(initialNewOrderState);
         fetchData();
     } catch (err) {
-        alert('Erro ao criar pedido. Verifique os dados.');
+        if (err instanceof Error) {
+            alert(`Erro ao criar pedido: ${err.message}`);
+        }
     }
   };
 
   if (loading) return <p>A carregar pedidos...</p>;
+  if (error) return <p className="text-red-500 bg-red-100 p-4 rounded-lg">Erro: {error}</p>;
 
   return (
     <div>
@@ -278,7 +286,6 @@ export default function PedidosPage() {
       </div>
       
       <audio ref={audioRef} src="https://cdn.freesound.org/previews/253/253887_3900301-lq.mp3" preload="auto"></audio>
-      {error && <p className="text-red-500 text-center py-4">{error}</p>}
       
       <div className="space-y-4">
         {orders.map((order) => (

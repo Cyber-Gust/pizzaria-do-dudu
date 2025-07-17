@@ -19,7 +19,7 @@ type ReportData = {
   totalRevenue: number;
   totalOrders: number;
   bestSellers: { name: string; count: number }[];
-  orders: Order[]; // Lista de todos os pedidos no período
+  orders: Order[];
 };
 
 const StatCard = ({ title, value, icon }: { title: string, value: string | number, icon: React.ReactNode }) => (
@@ -61,8 +61,12 @@ export default function RelatoriosPage() {
       if (!response.ok) throw new Error('Falha ao carregar os relatórios.');
       const data: ReportData = await response.json();
       setReportData(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) { // [CORRIGIDO]
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Ocorreu um erro desconhecido.");
+      }
     } finally {
       setLoading(false);
     }
@@ -81,7 +85,6 @@ export default function RelatoriosPage() {
       fetchReportData();
   }
 
-  // Função para determinar a cor do status
   const getStatusColor = (status: string) => {
     switch (status) {
         case 'Finalizado': return 'bg-gray-500';
@@ -134,11 +137,9 @@ export default function RelatoriosPage() {
             </ul>
           </div>
           
-          {/* Seção de Histórico de Pedidos */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Histórico de Pedidos Finalizados no Período</h2>
             <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
-              {/* [CORRIGIDO] Adicionado filtro para mostrar apenas pedidos com status "Finalizado" */}
               {reportData.orders && reportData.orders.filter(o => o.status === 'Finalizado').length > 0 ? (
                 reportData.orders
                   .filter(order => order.status === 'Finalizado')
@@ -165,7 +166,7 @@ export default function RelatoriosPage() {
           </div>
         </>
       ) : (
-        !loading && <p className="text-center text-gray-500 mt-8">Selecione um período e clique em "Gerar Relatório" para ver os dados.</p>
+        !loading && <p className="text-center text-gray-500 mt-8">Selecione um período e clique em &apos;Gerar Relatório&apos; para ver os dados.</p>
       )}
     </div>
   );
