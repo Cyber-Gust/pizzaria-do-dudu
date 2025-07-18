@@ -16,7 +16,7 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioClient = twilio(accountSid, authToken);
 const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'https://plataforma-cliente.vercel.app/';
+const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
