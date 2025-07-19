@@ -12,10 +12,9 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- CONFIGURAÇÃO DO TWILIO ---
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioClient = twilio(accountSid, authToken);
-const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
+const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
 
 const app = express();
@@ -35,94 +34,125 @@ app.use(express.urlencoded({ extended: true }));
 // --- FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS (CORRIGIDA) ---
 const sendWhatsappMessage = async (to, body) => {
   try {
-    // 1. Remove todos os caracteres que não são dígitos (como '(', ')', '-', ' ')
+    // 1. Remove todos os caracteres que não são dígitos
     let sanitizedNumber = to.replace(/\D/g, '');
 
-    // 2. Verifica se é um número de celular brasileiro com 11 dígitos (DDD + 9 + número)
+    // 2. Remove o código do país (55) se ele existir, para focar no número local
+    if (sanitizedNumber.startsWith('55')) {
+        sanitizedNumber = sanitizedNumber.substring(2);
+    }
+
+    // 3. Verifica se é um número de celular com 11 dígitos (DDD + 9 + número)
     if (sanitizedNumber.length === 11) {
       const ddd = sanitizedNumber.substring(0, 2);
       const numberPart = sanitizedNumber.substring(2);
 
-      // Se o número após o DDD começar com '9' (indicando celular), removemos este dígito
+      // Se o número após o DDD começar com '9', removemos este dígito
       if (numberPart.startsWith('9')) {
         const finalNumber = numberPart.substring(1); // Pega os 8 dígitos restantes
         sanitizedNumber = `${ddd}${finalNumber}`;
       }
     }
     
-    // 3. Adiciona o código do país (55) se o número agora tiver 10 dígitos (DDD + 8 dígitos)
-    if (sanitizedNumber.length === 10) {
-        sanitizedNumber = `55${sanitizedNumber}`;
-    }
-
-    // 4. Garante que o número final comece com '+' para o formato E.164
-    const formattedTo = `+${sanitizedNumber}`;
+    // 4. Adiciona o código do país (55) de volta para o formato final
+    const formattedTo = `55${sanitizedNumber}`;
     
-    await twilioClient.messages.create({
-      from: `whatsapp:${twilioWhatsappNumber}`,
-      to: `whatsapp:${formattedTo}`,
-      body: body,
-    });
-    console.log(`Mensagem enviada para ${formattedTo}`);
+    await axios.post(
+      `https://graph.facebook.com/v19.0/${META_PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to: formattedTo, // Envia o número limpo e com código do país, sem '+'
+        text: { body: body },
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${META_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    console.log(`Mensagem enviada para ${formattedTo} via Meta API`);
   } catch (error) {
-    console.error(`Erro ao enviar mensagem para ${to}:`, error.message);
+    console.error(`Erro ao enviar mensagem via Meta API para ${to}:`, error.response ? error.response.data.error.message : error.message);
   }
 };
 
 
-// --- WEBHOOK DO WHATSAPP ---
-app.post('/api/whatsapp', async (req, res) => {
-  const incomingMsg = req.body.Body.toLowerCase().trim();
-  const from = req.body.From.split(':')[1];
-  
-  console.log(`Mensagem recebida de ${from}: ${incomingMsg}`);
-
-  try {
-    const { data: status, error: statusError } = await supabase.from('pizzeria_status').select('is_open').single();
-    const { data: hours, error: hoursError } = await supabase.from('operating_hours').select('*').order('day_of_week');
-
-    if (statusError || hoursError) {
-      throw new Error('Não foi possível buscar as informações da pizzaria.');
+// --- WEBHOOK DO WHATSAPP PARA A META ---
+app.use('/api/whatsapp', (req, res) => {
+    // Rota GET para verificação do Webhook
+    if (req.method === 'GET') {
+        if (
+            req.query['hub.mode'] === 'subscribe' &&
+            req.query['hub.verify_token'] === META_VERIFY_TOKEN
+        ) {
+            console.log("Webhook verificado com sucesso!");
+            res.send(req.query['hub.challenge']);
+        } else {
+            console.error("Falha na verificação do Webhook. Tokens não correspondem.");
+            res.sendStatus(400);
+        }
     }
 
-    let responseMsg;
-    const wantsToOrder = ['pedido', 'cardápio', 'pizza', 'pedir', 'fazer pedido'].some(k => incomingMsg.includes(k));
-    const wantsHours = ['horário', 'horas', 'aberto', 'abrem', 'fechado'].some(k => incomingMsg.includes(k));
-    const wantsAddress = ['endereço', 'local', 'onde fica'].some(k => incomingMsg.includes(k));
+    // Rota POST para receber mensagens
+    if (req.method === 'POST') {
+        const entry = req.body.entry?.[0];
+        const change = entry?.changes?.[0];
+        const message = change?.value?.messages?.[0];
 
-    if (wantsToOrder) {
-      if (status.is_open) {
-        responseMsg = `Olá! 👋 Que bom que você quer pedir uma pizza!\n\nPara ver nosso cardápio completo e fazer seu pedido de forma rápida, acesse nosso site:\n\n*${clientPlatformUrl}*\n\nÉ só escolher, adicionar no carrinho e finalizar! 😉🍕`;
-      } else {
-        responseMsg = `Olá! No momento estamos fechados. 😔\n\nNosso horário de funcionamento é:\n`;
-        hours.forEach(day => {
-          if (day.is_open) {
-            responseMsg += `\n*${day.day_name}:* ${day.open_time} - ${day.close_time}`;
-          }
-        });
-        responseMsg += `\n\nAssim que abrirmos, será um prazer atender você!`;
-      }
-    } else if (wantsHours) {
-      responseMsg = `Nosso horário de funcionamento é:\n`;
-      hours.forEach(day => {
-        responseMsg += `\n*${day.day_name}:* ${day.is_open ? `${day.open_time} - ${day.close_time}` : 'Fechado'}`;
-      });
-      responseMsg += `\n\nQualquer outra dúvida, é só chamar!`;
-    } else if (wantsAddress) {
-      responseMsg = `Claro! Nosso endereço é:\n\n*Rua Fictícia, 123 - Centro, Sua Cidade*\n\nVocê pode ver no mapa clicando aqui: https://www.google.com/maps/place/Sua+Pizzaria`;
-    } else {
-      responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n1️⃣ Para fazer um *pedido*, digite "pedido".\n2️⃣ Para ver nosso *horário*, digite "horário".`;
+        if (message && message.type === 'text') {
+            const from = message.from; // Número do cliente
+            const incomingMsg = message.text.body.toLowerCase().trim();
+            
+            console.log(`Mensagem recebida de ${from}: ${incomingMsg}`);
+            handleIncomingMessage(from, incomingMsg);
+        }
+        
+        res.sendStatus(200);
     }
-
-    await sendWhatsappMessage(from, responseMsg);
-
-  } catch (error) {
-    console.error("Erro no webhook do WhatsApp:", error);
-    await sendWhatsappMessage(from, "Ops! Tivemos um probleminha aqui. Tente novamente em alguns instantes.");
-  }
-  
-  res.status(200).send('<Response/>');
 });
+
+// Função de IA para processar a mensagem
+const handleIncomingMessage = async (from, incomingMsg) => {
+    try {
+        const { data: status, error: statusError } = await supabase.from('pizzeria_status').select('is_open').single();
+        const { data: hours, error: hoursError } = await supabase.from('operating_hours').select('*').order('day_of_week');
+
+        if (statusError || hoursError) throw new Error('Falha ao buscar informações da pizzaria.');
+
+        let responseMsg;
+        const wantsToOrder = ['pedido', 'cardápio', 'pizza', 'pedir'].some(k => incomingMsg.includes(k));
+        const wantsHours = ['horário', 'horas', 'aberto', 'abrem', 'fechado'].some(k => incomingMsg.includes(k));
+        const wantsAddress = ['endereço', 'local', 'onde fica'].some(k => incomingMsg.includes(k));
+
+        if (wantsToOrder) {
+            if (status.is_open) {
+                responseMsg = `Olá! 👋 Que bom que você quer pedir uma pizza!\n\nPara ver nosso cardápio completo e fazer seu pedido de forma rápida, acesse nosso site:\n\n*${clientPlatformUrl}*\n\nÉ só escolher, adicionar no carrinho e finalizar! 😉🍕`;
+            } else {
+                responseMsg = `Olá! No momento estamos fechados. 😔\n\nNosso horário de funcionamento é:\n`;
+                hours.forEach(day => {
+                    if (day.is_open) responseMsg += `\n*${day.day_name}:* ${day.open_time} - ${day.close_time}`;
+                });
+                responseMsg += `\n\nAssim que abrirmos, será um prazer atender você!`;
+            }
+        } else if (wantsHours) {
+            responseMsg = `Nosso horário de funcionamento é:\n`;
+            hours.forEach(day => {
+                responseMsg += `\n*${day.day_name}:* ${day.is_open ? `${day.open_time} - ${day.close_time}` : 'Fechado'}`;
+            });
+        } else if (wantsAddress) {
+            responseMsg = `Claro! Nosso endereço é:\n\n*Rua Fictícia, 123 - Centro, Sua Cidade*\n\nVocê pode ver no mapa clicando aqui: https://www.google.com/maps/place/Sua+Pizzaria`;
+        } else {
+            responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n1️⃣ Para fazer um *pedido*, digite "pedido".\n2️⃣ Para ver nosso *horário*, digite "horário".`;
+        }
+
+        await sendWhatsappMessage(from, responseMsg);
+
+    } catch (error) {
+        console.error("Erro no processamento da IA:", error);
+        await sendWhatsappMessage(from, "Ops! Tivemos um probleminha aqui. Tente novamente em alguns instantes.");
+    }
+};
 
 
 // --- ROTAS DE STATUS ---
@@ -153,90 +183,84 @@ app.get('/api/orders', async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  const { items, ...orderDetails } = req.body;
-  if (!items || items.length === 0 || !orderDetails.order_type) {
-    return res.status(400).json({ error: 'Dados do pedido incompletos.' });
-  }
-  try {
-    const totalPrice = items.reduce((acc, item) => {
-        const extrasTotal = (item.extras || []).reduce((extraAcc, extra) => extraAcc + extra.price, 0);
-        return acc + (item.quantity * item.price_per_item) + extrasTotal;
-    }, 0);
-    const finalPrice = totalPrice;
-    const { data: newOrder, error: orderError } = await supabase
-      .from('orders')
-      .insert({ ...orderDetails, total_price: totalPrice, final_price: finalPrice, status: 'Em Preparo' })
-      .select()
-      .single();
-    if (orderError) throw orderError;
-    const orderItemsToInsert = items.map(item => ({
-      order_id: newOrder.id,
-      item_type: item.item_type,
-      item_id: item.item_id,
-      item_name: item.item_name,
-      quantity: item.quantity,
-      price_per_item: item.price_per_item,
-      selected_extras: item.extras
-    }));
-    const { error: itemsError } = await supabase.from('order_items').insert(orderItemsToInsert);
-    if (itemsError) {
-      await supabase.from('orders').delete().eq('id', newOrder.id);
-      throw itemsError;
+    const { items, ...orderDetails } = req.body;
+    if (!items || items.length === 0 || !orderDetails.order_type) {
+        return res.status(400).json({ error: 'Dados do pedido incompletos.' });
     }
-    const { data: completeOrder } = await supabase.from('orders').select('*, order_items(*)').eq('id', newOrder.id).single();
-    
-    if (completeOrder.customer_phone) {
-      const confirmationMsg = `Olá, ${completeOrder.customer_name}! ✅\n\nSeu pedido *#${completeOrder.id}* foi recebido e já está em preparo.\n\nVamos te atualizando por aqui! 🍕`;
-      await sendWhatsappMessage(completeOrder.customer_phone, confirmationMsg);
+    try {
+        const totalPrice = items.reduce((acc, item) => {
+            const extrasTotal = (item.extras || []).reduce((extraAcc, extra) => extraAcc + extra.price, 0);
+            return acc + (item.quantity * item.price_per_item) + extrasTotal;
+        }, 0);
+        const finalPrice = totalPrice;
+        const { data: newOrder, error: orderError } = await supabase
+            .from('orders')
+            .insert({ ...orderDetails, total_price: totalPrice, final_price: finalPrice, status: 'Em Preparo' })
+            .select()
+            .single();
+        if (orderError) throw orderError;
+        const orderItemsToInsert = items.map(item => ({
+            order_id: newOrder.id,
+            item_type: item.item_type,
+            item_id: item.item_id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            price_per_item: item.price_per_item,
+            selected_extras: item.extras
+        }));
+        const { error: itemsError } = await supabase.from('order_items').insert(orderItemsToInsert);
+        if (itemsError) {
+            await supabase.from('orders').delete().eq('id', newOrder.id);
+            throw itemsError;
+        }
+        const { data: completeOrder } = await supabase.from('orders').select('*, order_items(*)').eq('id', newOrder.id).single();
+
+        if (completeOrder.customer_phone) {
+            const confirmationMsg = `Olá, ${completeOrder.customer_name}! ✅\n\nSeu pedido *#${completeOrder.id}* foi recebido e já está em preparo.\n\nVamos te atualizando por aqui! 🍕`;
+            await sendWhatsappMessage(completeOrder.customer_phone, confirmationMsg);
+        }
+
+        res.status(201).json(completeOrder);
+    } catch (error) {
+        console.error('Erro ao criar novo pedido:', error);
+        res.status(500).json({ error: 'Erro interno ao criar o pedido.' });
     }
-    
-    res.status(201).json(completeOrder);
-  } catch (error) {
-    console.error('Erro ao criar novo pedido:', error);
-    res.status(500).json({ error: 'Erro interno ao criar o pedido.' });
-  }
 });
 
 app.post('/api/orders/:id', async (req, res) => {
-  const { id } = req.params;
-  const { newStatus, motoboyId } = req.body;
-  if (!newStatus) return res.status(400).json({ error: 'O novo status é obrigatório.' });
-  try {
-    const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
-    if (error) throw error;
-    
-    if (newStatus === 'Finalizado') {
-      await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: updatedOrder.final_price, order_id: updatedOrder.id }]);
-    }
+    const { id } = req.params;
+    const { newStatus, motoboyId } = req.body;
+    if (!newStatus) return res.status(400).json({ error: 'O novo status é obrigatório.' });
+    try {
+        const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
+        if (error) throw error;
 
-    if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
-        const msg = `Boas notícias! 🎉\n\nSeu pedido *#${updatedOrder.id}* está pronto para retirada!`;
-        await sendWhatsappMessage(updatedOrder.customer_phone, msg);
-    }
-
-    if (newStatus === 'Saiu para Entrega') {
-      // --- ATUALIZAÇÃO AQUI ---
-      // Notifica o cliente que o pedido saiu para entrega
-      if (updatedOrder.customer_phone) {
-        const customerMsg = `Seu pedido *#${updatedOrder.id}* saiu para entrega! 🛵\n\nLogo logo chega aí!`;
-        await sendWhatsappMessage(updatedOrder.customer_phone, customerMsg);
-      }
-
-      // Notifica o motoboy selecionado
-      if (motoboyId) {
-        const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
-        if (motoboy && motoboy.whatsapp_number) {
-          const itemsList = updatedOrder.order_items.map(item => `${item.quantity}x ${item.item_name}`).join('\n');
-          const mapsLink = `https://www.google.com/maps/place/${encodeURIComponent(updatedOrder.address || '')}`;
-          const finalizeLink = `https://SUA_URL_DO_BACKEND.onrender.com/api/orders/${updatedOrder.id}/finalize`;
-          const message = `*Pedido #${updatedOrder.id}* para entrega!\n\n*CLIENTE:* ${updatedOrder.customer_name}\n*FONE:* ${updatedOrder.customer_phone}\n\n*ENDEREÇO:* ${updatedOrder.address}\n*Maps:* ${mapsLink}\n\n*ITENS:*\n${itemsList}\n\n*TOTAL:* R$ ${updatedOrder.final_price.toFixed(2)}\n\n---\n*Clique para marcar como entregue:*\n${finalizeLink}`;
-          
-          await sendWhatsappMessage(motoboy.whatsapp_number, message);
+        if (newStatus === 'Finalizado') {
+            await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: updatedOrder.final_price, order_id: updatedOrder.id }]);
         }
-      }
-    }
-    res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
-  } catch (error) { res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); }
+
+        if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
+            const msg = `Boas notícias! 🎉\n\nSeu pedido *#${updatedOrder.id}* está pronto para retirada!`;
+            await sendWhatsappMessage(updatedOrder.customer_phone, msg);
+        }
+        if (newStatus === 'Saiu para Entrega') {
+            if (updatedOrder.customer_phone) {
+                const customerMsg = `Seu pedido *#${updatedOrder.id}* saiu para entrega! 🛵\n\nLogo logo chega aí!`;
+                await sendWhatsappMessage(updatedOrder.customer_phone, customerMsg);
+            }
+            if (motoboyId) {
+                const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
+                if (motoboy && motoboy.whatsapp_number) {
+                    const itemsList = updatedOrder.order_items.map(item => `${item.quantity}x ${item.item_name}`).join('\n');
+                    const mapsLink = `https://www.google.com/maps/place/${encodeURIComponent(updatedOrder.address || '')}`;
+                    const finalizeLink = `https://seu-backend.onrender.com/api/orders/${updatedOrder.id}/finalize`;
+                    const message = `*Pedido #${updatedOrder.id}* para entrega!\n\n*CLIENTE:* ${updatedOrder.customer_name}\n*FONE:* ${updatedOrder.customer_phone}\n\n*ENDEREÇO:* ${updatedOrder.address}\n*Maps:* ${mapsLink}\n\n*ITENS:*\n${itemsList}\n\n*TOTAL:* R$ ${updatedOrder.final_price.toFixed(2)}\n\n---\n*Clique para marcar como entregue:*\n${finalizeLink}`;
+                    await sendWhatsappMessage(motoboy.whatsapp_number, message);
+                }
+            }
+        }
+        res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
+    } catch (error) { res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); }
 });
 
 app.get('/api/orders/:id/finalize', async (req, res) => {
@@ -246,6 +270,46 @@ app.get('/api/orders/:id/finalize', async (req, res) => {
         res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
     } catch (error) {
         res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
+    }
+});
+
+// --- ROTAS DE ESTOQUE: INGREDIENTES ---
+app.get('/api/ingredients', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('ingredients').select('*').order('name');
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) { res.status(500).json({ error: 'Erro ao buscar ingredientes.' }); }
+});
+app.post('/api/ingredients', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('ingredients').insert([req.body]).select().single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar ingrediente.' }); }
+});
+app.put('/api/ingredients/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data, error } = await supabase.from('ingredients').update(req.body).eq('id', id).select().single();
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao atualizar ingrediente.' }); }
+});
+app.delete('/api/ingredients/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { error } = await supabase.from('ingredients').delete().eq('id', id);
+        if (error) {
+            if (error.code === '23503') {
+                return res.status(409).json({ error: 'Não é possível apagar este ingrediente, pois ele está a ser utilizado numa ou mais pizzas. Remova-o primeiro das receitas.' });
+            }
+            return res.status(400).json({ error: error.message });
+        }
+        res.status(204).send();
+    } catch (error) {
+        console.error('Erro inesperado ao apagar ingrediente:', error);
+        res.status(500).json({ error: 'Ocorreu um erro inesperado no servidor.' });
     }
 });
 
@@ -618,6 +682,8 @@ app.put('/api/operating-hours/:day', async (req, res) => {
         res.status(200).json(data);
     } catch (error) { res.status(500).json({ error: 'Erro ao atualizar horário.' }); }
 });
+
+
 
 // --- INICIALIZAÇÃO ---
 app.listen(PORT, () => {
