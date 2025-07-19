@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { createClient } = require('@supabase/supabase-js');
-const twilio = require('twilio');
+const axios = require('axios');
 
 // --- CONFIGURAÇÃO DO SUPABASE E EXPRESS ---
 const supabaseUrl = process.env.SUPABASE_URL;
