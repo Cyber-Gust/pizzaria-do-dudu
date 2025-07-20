@@ -69,16 +69,13 @@ export default function CheckoutPage() {
     }
   };
 
-  // --- [ATUALIZADO] Usando o seu construtor manual de PIX ---
   const generatePixCode = () => {
     try {
-      // Validação inicial
       if (total <= 0) {
         toast.error('Valor inválido para gerar PIX');
         return;
       }
 
-      // Função para calcular CRC16 CCITT
       const crc16 = (str: string) => {
         let crc = 0xFFFF;
         for (let i = 0; i < str.length; i++) {
@@ -89,77 +86,40 @@ export default function CheckoutPage() {
             } else {
               crc <<= 1;
             }
-            crc &= 0xFFFF; // Manter apenas 16 bits
+            crc &= 0xFFFF;
           }
         }
         return crc.toString(16).toUpperCase().padStart(4, '0');
       };
 
-      // Função para formatar campo PIX (ID + Length + Value)
       const formatField = (id: string, value: string) => {
         const length = value.length.toString().padStart(2, '0');
         return `${id}${length}${value}`;
       };
 
-      // Dados do beneficiário
       const pixKey = '59132299000180';
-      const merchantName = 'CARLOS EDUARDO DA SILVA'; // 25 caracteres max
-      const merchantCity = 'SAO JOAO DEL REI'; // 15 caracteres max
+      const merchantName = 'CARLOS EDUARDO DA SILVA';
+      // --- CORREÇÃO AQUI: Nome da cidade encurtado para 15 caracteres ---
+      const merchantCity = 'SAO JOAO D REI'; 
       const amount = total.toFixed(2);
-      const transactionId = `PED${Date.now().toString().slice(-8)}`; // ID mais curto
+      const transactionId = `PED${Date.now().toString().slice(-8)}`;
 
-      console.log('Gerando PIX com dados:', {
-        pixKey,
-        merchantName: `${merchantName} (${merchantName.length} chars)`,
-        merchantCity: `${merchantCity} (${merchantCity.length} chars)`,
-        amount,
-        transactionId
-      });
-
-      // Construir payload PIX passo a passo
       let payload = '';
-      
-      // 00 - Payload Format Indicator
       payload += formatField('00', '01');
-      
-      // 01 - Point of Initiation Method
-      payload += formatField('01', '12');
-      
-      // 26 - Merchant Account Information (PIX)
       const pixInfo = formatField('00', 'BR.GOV.BCB.PIX') + formatField('01', pixKey);
       payload += formatField('26', pixInfo);
-      
-      // 52 - Merchant Category Code
       payload += formatField('52', '0000');
-      
-      // 53 - Transaction Currency (986 = BRL)
       payload += formatField('53', '986');
-      
-      // 54 - Transaction Amount
       payload += formatField('54', amount);
-      
-      // 58 - Country Code
       payload += formatField('58', 'BR');
-      
-      // 59 - Merchant Name
       payload += formatField('59', merchantName);
-      
-      // 60 - Merchant City
       payload += formatField('60', merchantCity);
-      
-      // 62 - Additional Data Field Template
       const additionalData = formatField('05', transactionId);
       payload += formatField('62', additionalData);
-      
-      // 63 - CRC16 (placeholder)
       payload += '6304';
       
-      // Calcular CRC16 e substituir placeholder
       const crcValue = crc16(payload);
       payload += crcValue;
-
-      console.log('PIX payload gerado:', payload);
-      console.log('Tamanho do payload:', payload.length);
       
       setPixCode(payload);
       toast.success('Código PIX gerado com sucesso!');
@@ -222,7 +182,7 @@ export default function CheckoutPage() {
         <Toaster position="top-center" />
         <h1 className="text-2xl font-bold mb-4">Pague com PIX</h1>
         <p className="mb-4">Aponte a câmara do seu telemóvel para o QR Code abaixo.</p>
-        <div className="flex justify-center mb-4 p-4 bg-white inline-block rounded-lg shadow-md">
+        <div className="flex justify-center mb-4 p-4 bg-white rounded-lg shadow-md">
           <QRCodeCanvas value={pixCode} size={256} />
         </div>
         <p className="font-semibold mb-2">Ou use o PIX Copia e Cola:</p>
