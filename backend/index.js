@@ -336,22 +336,32 @@ app.post('/api/orders/:id', async (req, res) => {
             if (motoboyId) {
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
                 if (motoboy && motoboy.whatsapp_number) {
-                    const itemsList = updatedOrder.order_items.map(item => {
-                        let extrasText = '';
-                        if (item.selected_extras && item.selected_extras.length > 0) {
-                            extrasText = ` (Adicionais: ${item.selected_extras.map(e => e.name).join(', ')})`;
-                        }
-                        return `  - ${item.quantity}x ${item.item_name}${extrasText}`;
-                    }).join('\n');
+                    // --- [CORREÇÃO] Adicionada verificação de segurança ---
+                    const itemsList = Array.isArray(updatedOrder.order_items) 
+                        ? updatedOrder.order_items.map(item => {
+                            let extrasText = '';
+                            if (item.selected_extras && item.selected_extras.length > 0) {
+                                extrasText = ` (Adicionais: ${item.selected_extras.map(e => e.name).join(', ')})`;
+                            }
+                            return `  - ${item.quantity}x ${item.item_name}${extrasText}`;
+                        }).join('\n')
+                        : 'Itens não detalhados.'; // Fallback caso os itens não carreguem
+
+                    const cleanAddress = (updatedOrder.address || '').split('(Taxa:')[0].trim();
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
-                    const message = `*Novo Pedido para Entrega: #${updatedOrder.id}* 🛵\n\n*Cliente:* ${updatedOrder.customer_name}\n*Telefone:* ${updatedOrder.customer_phone}\n\n*Endereço:* ${updatedOrder.address}\n*Link do Mapa:* ${mapsLink}\n\n---\n*Itens:*\n${itemsList}\n---\n\n*Pagamento na Entrega:*\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Forma:* ${updatedOrder.payment_method}\n\n---\n👇 *AO ENTREGAR, CLIQUE AQUI:* 👇\n${finalizeLink}`;
+                    
+                    const message = `*Novo Pedido para Entrega: #${updatedOrder.id}* 🛵\n\n*Cliente:* ${updatedOrder.customer_name}\n*Telefone:* ${updatedOrder.customer_phone}\n\n*Endereço:* ${cleanAddress}\n*Link do Mapa:* ${mapsLink}\n\n---\n*Itens:*\n${itemsList}\n---\n\n*Pagamento na Entrega:*\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Forma:* ${updatedOrder.payment_method}\n\n---\n👇 *AO ENTREGAR, CLIQUE AQUI:* 👇\n${finalizeLink}`;
                     await sendWhatsappMessage(motoboy.whatsapp_number, message);
                 }
             }
         }
         res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
-    } catch (error) { res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); }
+    } catch (error) { 
+        // --- [MELHORIA] Log de erro mais detalhado ---
+        console.error(`Erro detalhado ao atualizar o pedido #${id}:`, error);
+        res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); 
+    }
 });
 
 app.get('/api/orders/:id/finalize', async (req, res) => {
@@ -787,7 +797,7 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
       if (error) throw error;
       
       if (data.customer_phone) {
-          const msg = `Olá, ${data.customer_name}. Gostaríamos de confirmar que o seu pedido *#${data.id}* foi cancelado conforme solicitado. Se precisar de algo mais, é só chamar!`;
+          const msg = `Olá, ${data.customer_name}. Gostaríamos de informar que o seu pedido *#${data.id}* foi cancelado"`;
           await sendWhatsappMessage(data.customer_phone, msg);
       }
 

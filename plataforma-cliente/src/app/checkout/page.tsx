@@ -101,6 +101,7 @@ const whatsappNumber = "5532999413289";
       payment_method: paymentMethod,
       order_type: orderType,
       items: items.map(item => {
+        // --- [CORREÇÃO AQUI] ---
         // A forma mais fiável de saber se é uma bebida é verificar se a propriedade 'stock_quantity' existe.
         const itemType = 'stock_quantity' in item.product ? 'drink' : 'pizza';
         
@@ -118,7 +119,6 @@ const whatsappNumber = "5532999413289";
       }),
     };
 
-
     try {
       await createOrder(orderPayload);
       toast.success('Pedido realizado com sucesso!');
@@ -130,6 +130,7 @@ const whatsappNumber = "5532999413289";
         router.push('/');
       }
     } catch (error) {
+      console.error("Erro detalhado ao criar pedido:", error);
       toast.error('Houve um erro ao enviar seu pedido.');
       setIsProcessing(false);
     }
