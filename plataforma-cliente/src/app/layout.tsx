@@ -12,7 +12,7 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Pizzaria do Dudo",
+  title: "Forneria 360",
   description: "Peça online a melhor pizza da cidade!",
 };
 
