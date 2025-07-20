@@ -1,4 +1,3 @@
-// src/app/dashboard/financeiro/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
@@ -10,6 +9,7 @@ type Transaction = {
     type: 'income' | 'expense';
     amount: number;
     transaction_date: string;
+    order_id: number | null; // Adicionado para saber se é uma venda
 };
 
 // Componente para os cartões de estatísticas
@@ -25,9 +25,9 @@ export default function FinanceiroPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Estados para o modal de nova despesa
+    // [ATUALIZADO] Estados para o modal de transação
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newExpense, setNewExpense] = useState({ description: '', amount: '' });
+    const [currentTransaction, setCurrentTransaction] = useState<Partial<Transaction> | null>(null);
 
     // Estados para o filtro de data
     const [startDate, setStartDate] = useState('');
@@ -35,7 +35,6 @@ export default function FinanceiroPage() {
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-    // Função para buscar os dados do livro caixa com filtro
     const fetchCashFlow = useCallback(async (start: string, end: string) => {
         setLoading(true);
         setError(null);
@@ -45,7 +44,7 @@ export default function FinanceiroPage() {
             if (!response.ok) throw new Error('Falha ao carregar dados financeiros.');
             const data: Transaction[] = await response.json();
             setTransactions(data);
-        } catch (err: unknown) { // [CORRIGIDO]
+        } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message);
             } else {
@@ -56,7 +55,6 @@ export default function FinanceiroPage() {
         }
     }, [API_URL]);
 
-    // Define as datas padrão para o mês atual e busca os dados iniciais
     useEffect(() => {
         const today = new Date();
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
@@ -66,7 +64,6 @@ export default function FinanceiroPage() {
         fetchCashFlow(firstDay, lastDay);
     }, [fetchCashFlow]);
 
-    // Função para o botão de filtrar
     const handleFilterSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!startDate || !endDate) {
@@ -76,31 +73,64 @@ export default function FinanceiroPage() {
         fetchCashFlow(startDate, endDate);
     };
 
-    // Função para adicionar uma nova despesa
-    const handleAddExpense = async (e: React.FormEvent<HTMLFormElement>) => {
+    // [ATUALIZADO] Abre o modal para uma nova despesa
+    const handleOpenAddModal = () => {
+        setCurrentTransaction({ description: '', amount: undefined, type: 'expense' });
+        setIsModalOpen(true);
+    };
+
+    // [NOVO] Abre o modal para editar uma transação existente
+    const handleOpenEditModal = (transaction: Transaction) => {
+        setCurrentTransaction({ ...transaction });
+        setIsModalOpen(true);
+    };
+
+    // [ATUALIZADO] Função para salvar (adicionar ou editar) uma transação
+    const handleSaveTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const amountNumber = parseFloat(newExpense.amount);
-        if (!newExpense.description || isNaN(amountNumber) || amountNumber <= 0) {
+        if (!currentTransaction || !currentTransaction.description || !currentTransaction.amount || currentTransaction.amount <= 0) {
             alert('Por favor, preencha a descrição e um valor válido.');
             return;
         }
+
+        const isEditing = !!currentTransaction.id;
+        const url = isEditing ? `${API_URL}/api/cashflow/${currentTransaction.id}` : `${API_URL}/api/cashflow`;
+        const method = isEditing ? 'PUT' : 'POST';
+
         try {
-            await fetch(`${API_URL}/api/cashflow`, {
-                method: 'POST',
+            await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description: newExpense.description, amount: amountNumber, type: 'expense' }),
+                body: JSON.stringify({ 
+                    description: currentTransaction.description, 
+                    amount: currentTransaction.amount,
+                    type: currentTransaction.type // Mantém o tipo original
+                }),
             });
-            setNewExpense({ description: '', amount: '' });
             setIsModalOpen(false);
-            fetchCashFlow(startDate, endDate); // Recarrega os dados do período atual
-        } catch (err: unknown) { // [CORRIGIDO]
+            setCurrentTransaction(null);
+            fetchCashFlow(startDate, endDate);
+        } catch (err: unknown) {
             if (err instanceof Error) {
                 alert(err.message);
             }
         }
     };
 
-    // Calcula os somatórios
+    // [NOVO] Função para excluir uma transação
+    const handleDeleteTransaction = async (transactionId: string) => {
+        if (window.confirm('Tem a certeza que quer apagar esta transação?')) {
+            try {
+                await fetch(`${API_URL}/api/cashflow/${transactionId}`, { method: 'DELETE' });
+                fetchCashFlow(startDate, endDate);
+            } catch (err: unknown) {
+                if (err instanceof Error) {
+                    alert(err.message);
+                }
+            }
+        }
+    };
+
     const { totalIncome, totalExpenses, balance } = useMemo(() => {
         const income = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
         const expenses = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
@@ -113,12 +143,11 @@ export default function FinanceiroPage() {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Livro Caixa</h1>
-                <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">
+                <button onClick={handleOpenAddModal} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">
                     + Adicionar Despesa
                 </button>
             </div>
 
-            {/* Formulário de Filtro de Data */}
             <form onSubmit={handleFilterSubmit} className="bg-white p-4 rounded-lg shadow-md mb-6 flex flex-wrap items-end gap-4">
                 <div>
                     <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">Data de Início</label>
@@ -137,14 +166,12 @@ export default function FinanceiroPage() {
             
             {loading ? <p>A carregar dados financeiros...</p> : (
             <>
-                {/* Secção de Somatórios */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <StatCard title="Entradas no Período" value={formatCurrency(totalIncome)} colorClass="text-green-600" />
                     <StatCard title="Saídas no Período" value={formatCurrency(totalExpenses)} colorClass="text-red-600" />
                     <StatCard title="Balanço do Período" value={formatCurrency(balance)} colorClass={balance >= 0 ? "text-blue-600" : "text-red-600"} />
                 </div>
 
-                {/* Tabela de Transações */}
                 <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-semibold text-gray-800 mb-4">Histórico de Transações</h2>
                     <div className="overflow-x-auto">
@@ -155,6 +182,7 @@ export default function FinanceiroPage() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -170,6 +198,17 @@ export default function FinanceiroPage() {
                                         <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                                             {t.type === 'expense' && '- '}{formatCurrency(t.amount)}
                                         </td>
+                                        {/* [NOVO] Botões de Ação */}
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            {t.order_id === null ? ( // Só permite editar/excluir se não for uma venda
+                                                <>
+                                                    <button onClick={() => handleOpenEditModal(t)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
+                                                    <button onClick={() => handleDeleteTransaction(t.id)} className="text-red-600 hover:text-red-900 ml-4">Excluir</button>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-gray-400">Venda</span>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -180,19 +219,35 @@ export default function FinanceiroPage() {
             </>
             )}
 
-            {/* Modal para Adicionar Despesa */}
-            {isModalOpen && (
+            {isModalOpen && currentTransaction && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
                     <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-                        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Adicionar Nova Despesa</h3>
-                        <form onSubmit={handleAddExpense}>
+                        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                            {currentTransaction.id ? 'Editar Transação' : 'Adicionar Nova Despesa'}
+                        </h3>
+                        <form onSubmit={handleSaveTransaction}>
                             <div className="space-y-4">
-                                <input type="text" placeholder="Descrição (ex: Compra de queijo)" value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} className="w-full p-2 border rounded" required />
-                                <input type="number" placeholder="Valor (ex: 50.00)" step="0.01" value={newExpense.amount} onChange={e => setNewExpense({...newExpense, amount: e.target.value})} className="w-full p-2 border rounded" required />
+                                <input 
+                                    type="text" 
+                                    placeholder="Descrição" 
+                                    value={currentTransaction.description || ''} 
+                                    onChange={e => setCurrentTransaction({...currentTransaction, description: e.target.value})} 
+                                    className="w-full p-2 border rounded" 
+                                    required 
+                                />
+                                <input 
+                                    type="number" 
+                                    placeholder="Valor (ex: 50.00)" 
+                                    step="0.01" 
+                                    value={currentTransaction.amount || ''} 
+                                    onChange={e => setCurrentTransaction({...currentTransaction, amount: parseFloat(e.target.value)})} 
+                                    className="w-full p-2 border rounded" 
+                                    required 
+                                />
                             </div>
                             <div className="mt-6 flex justify-end space-x-2">
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Salvar Despesa</button>
+                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Salvar</button>
                             </div>
                         </form>
                     </div>

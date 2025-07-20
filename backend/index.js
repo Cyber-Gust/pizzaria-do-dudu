@@ -841,6 +841,49 @@ app.post('/api/customers', async (req, res) => {
   }
 });
 
+// --- [NOVO] ROTA PARA ATUALIZAR UMA TRANSAÇÃO ---
+app.put('/api/cashflow/:id', async (req, res) => {
+    const { id } = req.params;
+    const { description, amount } = req.body; // Apenas permite a atualização da descrição e do valor
+
+    if (!description || !amount) {
+        return res.status(400).json({ error: 'Descrição e valor são obrigatórios.' });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('cash_flow')
+            .update({ description, amount })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.status(200).json({ message: 'Transação atualizada com sucesso!', data });
+    } catch (err) {
+        console.error(`Erro ao atualizar transação #${id}:`, err);
+        res.status(500).json({ error: 'Erro interno ao atualizar a transação.' });
+    }
+});
+
+// --- [NOVO] ROTA PARA APAGAR UMA TRANSAÇÃO ---
+app.delete('/api/cashflow/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const { error } = await supabase
+            .from('cash_flow')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.status(204).send(); // 204 No Content indica sucesso sem corpo de resposta
+    } catch (err) {
+        console.error(`Erro ao apagar transação #${id}:`, err);
+        res.status(500).json({ error: 'Erro interno ao apagar a transação.' });
+    }
+});
+
 // --- INICIALIZAÇÃO ---
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
