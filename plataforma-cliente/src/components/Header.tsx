@@ -19,7 +19,7 @@ const Header = () => {
   const totalItems = isMounted ? items.reduce((acc, item) => acc + item.quantity, 0) : 0;
 
   // --- ATENÇÃO: COLOQUE SEU LINK DO GOOGLE AQUI ---
-  const googleReviewLink = "https://g.page/r/SEU_LINK_AQUI/review";
+  const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review";
 
   const handleReviewClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!isAuthenticated) {

@@ -1,4 +1,3 @@
-// src/app/dashboard/pedidos/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -19,6 +18,7 @@ type Order = {
 type Motoboy = { id: string; name: string; };
 type Product = { id: string; name: string; price: number; item_type: 'pizza' | 'drink' };
 type Extra = { id: string; price: number; ingredients: { name: string } };
+type DeliveryFee = { id: string; neighborhood_name: string; fee_amount: number; }; // Nova tipagem
 
 // Tipagem para os itens dentro do novo pedido
 type NewOrderItem = {
@@ -37,6 +37,8 @@ const initialNewOrderState = {
   order_type: 'pickup',
   payment_method: 'cash',
   items: [] as NewOrderItem[],
+  discount_amount: 0, // Novo campo
+  delivery_fee: 0,    // Novo campo
 };
 
 export default function PedidosPage() {
@@ -44,6 +46,7 @@ export default function PedidosPage() {
   const [motoboys, setMotoboys] = useState<Motoboy[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [extras, setExtras] = useState<Extra[]>([]);
+  const [deliveryFees, setDeliveryFees] = useState<DeliveryFee[]>([]); // Novo estado
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -63,14 +66,15 @@ export default function PedidosPage() {
     setLoading(true);
     setError(null);
     try {
-      const [ordersRes, motoboysRes, pizzasRes, drinksRes, extrasRes] = await Promise.all([
+      const [ordersRes, motoboysRes, pizzasRes, drinksRes, extrasRes, feesRes] = await Promise.all([
         fetch(`${API_URL}/api/orders`),
         fetch(`${API_URL}/api/motoboys`),
         fetch(`${API_URL}/api/pizzas`),
         fetch(`${API_URL}/api/drinks`),
         fetch(`${API_URL}/api/extras`),
+        fetch(`${API_URL}/api/delivery-fees`), // Buscar taxas
       ]);
-      if (!ordersRes.ok || !motoboysRes.ok || !pizzasRes.ok || !drinksRes.ok || !extrasRes.ok) throw new Error('Falha ao carregar dados.');
+      if (!ordersRes.ok || !motoboysRes.ok || !pizzasRes.ok || !drinksRes.ok || !extrasRes.ok || !feesRes.ok) throw new Error('Falha ao carregar dados.');
       
       setOrders(await ordersRes.json());
       setMotoboys(await motoboysRes.json());
@@ -78,6 +82,7 @@ export default function PedidosPage() {
       const drinksData = (await drinksRes.json()).map((d: Product) => ({ ...d, item_type: 'drink' as const }));
       setProducts([...pizzasData, ...drinksData]);
       setExtras(await extrasRes.json());
+      setDeliveryFees(await feesRes.json()); // Salvar taxas no estado
 
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -177,7 +182,7 @@ export default function PedidosPage() {
   };
 
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
-    if (newStatus === 'Finalizado') {
+    if (newStatus === 'Finalizado' || newStatus === 'Cancelado') {
       setOrders(current => current.filter(o => o.id !== orderId));
     } else {
       setOrders(current => current.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
@@ -207,6 +212,19 @@ export default function PedidosPage() {
     if (!motoboyModal.order) return;
     setMotoboyModal({ isOpen: false, order: null });
     updateOrderStatus(motoboyModal.order.id, 'Saiu para Entrega', motoboyId);
+  };
+
+  const handleCancelOrder = async (orderId: number) => {
+    if (window.confirm(`Tem a certeza que quer cancelar o Pedido #${orderId}? Esta ação não pode ser desfeita.`)) {
+        try {
+            const response = await fetch(`${API_URL}/api/orders/${orderId}/cancel`, { method: 'POST' });
+            if (!response.ok) throw new Error('Falha ao cancelar o pedido.');
+            setOrders(current => current.filter(o => o.id !== orderId));
+            alert('Pedido cancelado com sucesso.');
+        } catch (err: any) {
+            alert(`Erro ao cancelar pedido: ${err.message}`);
+        }
+    }
   };
 
   const handleAddExtraToItem = (itemIndex: number, extraId: string) => {
@@ -243,11 +261,14 @@ export default function PedidosPage() {
   };
 
   const newOrderTotal = useMemo(() => {
-    return newOrderData.items.reduce((acc, item) => {
+    const itemsTotal = newOrderData.items.reduce((acc, item) => {
         const extrasTotal = item.extras.reduce((extraAcc, extra) => extraAcc + extra.price, 0);
         return acc + (item.quantity * item.price_per_item) + extrasTotal;
     }, 0);
-  }, [newOrderData.items]);
+    const deliveryFee = newOrderData.order_type === 'delivery' ? newOrderData.delivery_fee : 0;
+    const discount = newOrderData.discount_amount || 0;
+    return (itemsTotal + deliveryFee) - discount;
+  }, [newOrderData]);
 
   const handleSaveNewOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -310,6 +331,7 @@ export default function PedidosPage() {
                 )}
                 <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar Pedido</button>
                 <button onClick={() => printOrder(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
+                <button onClick={() => handleCancelOrder(order.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Cancelar</button>
             </div>
           </div>
         ))}
@@ -343,7 +365,23 @@ export default function PedidosPage() {
                     <label className="text-sm font-medium">Tipo de Pedido</label>
                     <div className="flex gap-4 mt-1"><label><input type="radio" name="order_type" value="pickup" checked={newOrderData.order_type === 'pickup'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Retirada</label><label><input type="radio" name="order_type" value="delivery" checked={newOrderData.order_type === 'delivery'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Entrega</label></div>
                 </div>
-                {newOrderData.order_type === 'delivery' && <input type="text" placeholder="Endereço de Entrega" value={newOrderData.address} onChange={e => setNewOrderData({...newOrderData, address: e.target.value})} className="w-full p-2 border rounded" />}
+                {newOrderData.order_type === 'delivery' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" placeholder="Endereço de Entrega" value={newOrderData.address} onChange={e => setNewOrderData({...newOrderData, address: e.target.value})} className="w-full p-2 border rounded" />
+                        <select 
+                            value={newOrderData.delivery_fee} 
+                            onChange={e => setNewOrderData({...newOrderData, delivery_fee: parseFloat(e.target.value)})}
+                            className="w-full p-2 border rounded"
+                        >
+                            <option value={0}>Selecione a taxa...</option>
+                            {deliveryFees.map(fee => (
+                                <option key={fee.id} value={fee.fee_amount}>
+                                    {fee.neighborhood_name} - R$ {fee.fee_amount.toFixed(2)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
                 <div>
                     <label className="text-sm font-medium">Itens do Pedido</label>
                     <div className="flex gap-2 mt-1">
@@ -382,7 +420,20 @@ export default function PedidosPage() {
                     ))}
                     {newOrderData.items.length === 0 && <p className="text-gray-400 text-sm text-center py-4">Nenhum item adicionado.</p>}
                 </div>
-                <div className="text-right font-bold text-xl">Total: R$ {newOrderTotal.toFixed(2)}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label className="text-sm font-medium">Desconto (R$)</label>
+                        <input 
+                            type="number" 
+                            placeholder="0.00" 
+                            step="0.01"
+                            value={newOrderData.discount_amount || ''} 
+                            onChange={e => setNewOrderData({...newOrderData, discount_amount: parseFloat(e.target.value) || 0})}
+                            className="w-full p-2 border rounded"
+                        />
+                    </div>
+                    <div className="text-right font-bold text-xl">Total: R$ {newOrderTotal.toFixed(2)}</div>
+                </div>
                 <div className="flex justify-end space-x-3 pt-4">
                     <button type="button" onClick={() => { setIsNewOrderModalOpen(false); setNewOrderData(initialNewOrderState); }} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
                     <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">Salvar Pedido</button>

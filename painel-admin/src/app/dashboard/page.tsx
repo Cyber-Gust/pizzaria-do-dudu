@@ -1,13 +1,15 @@
-// src/app/dashboard/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 
+// Tipagem atualizada para a janela de tempo
 type PizzeriaStatus = {
   id: number;
   is_open: boolean;
-  pickup_time_minutes: number;
-  delivery_time_minutes: number;
+  pickup_time_min: number;
+  pickup_time_max: number;
+  delivery_time_min: number;
+  delivery_time_max: number;
   updated_at: string;
 };
 
@@ -16,8 +18,11 @@ export default function DashboardHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [pickupTime, setPickupTime] = useState('');
-  const [deliveryTime, setDeliveryTime] = useState('');
+  // Estados separados para min e max
+  const [pickupTimeMin, setPickupTimeMin] = useState('');
+  const [pickupTimeMax, setPickupTimeMax] = useState('');
+  const [deliveryTimeMin, setDeliveryTimeMin] = useState('');
+  const [deliveryTimeMax, setDeliveryTimeMax] = useState('');
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
 
@@ -29,9 +34,12 @@ export default function DashboardHomePage() {
       if (!response.ok) throw new Error('Falha ao carregar status.');
       const data: PizzeriaStatus = await response.json();
       setStatus(data);
-      setPickupTime(data.pickup_time_minutes.toString());
-      setDeliveryTime(data.delivery_time_minutes.toString());
-    } catch (err: unknown) { // [CORRIGIDO]
+      // Atualiza os novos estados com os dados da API
+      setPickupTimeMin(data.pickup_time_min?.toString() || '');
+      setPickupTimeMax(data.pickup_time_max?.toString() || '');
+      setDeliveryTimeMin(data.delivery_time_min?.toString() || '');
+      setDeliveryTimeMax(data.delivery_time_max?.toString() || '');
+    } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
       }
@@ -55,7 +63,7 @@ export default function DashboardHomePage() {
       });
       if (!response.ok) throw new Error('Falha ao atualizar status.');
       await fetchPizzeriaStatus();
-    } catch (err: unknown) { // [CORRIGIDO]
+    } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
       }
@@ -70,15 +78,18 @@ export default function DashboardHomePage() {
       const response = await fetch(`${API_URL}/api/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Envia os quatro novos campos para o backend
         body: JSON.stringify({ 
-          pickup_time_minutes: parseInt(pickupTime, 10),
-          delivery_time_minutes: parseInt(deliveryTime, 10),
+          pickup_time_min: parseInt(pickupTimeMin, 10),
+          pickup_time_max: parseInt(pickupTimeMax, 10),
+          delivery_time_min: parseInt(deliveryTimeMin, 10),
+          delivery_time_max: parseInt(deliveryTimeMax, 10),
         }),
       });
       if (!response.ok) throw new Error('Falha ao salvar os tempos.');
       await fetchPizzeriaStatus();
       alert('Tempos atualizados com sucesso!');
-    } catch (err: unknown) { // [CORRIGIDO]
+    } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
       }
@@ -115,35 +126,59 @@ export default function DashboardHomePage() {
 
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Configurações de Tempo</h2>
-        <form onSubmit={handleSaveTimes} className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-            <div className="flex-1">
-              <label htmlFor="pickupTime" className="block text-sm font-medium text-gray-700">
-                Tempo de Retirada (minutos)
-              </label>
+        <form onSubmit={handleSaveTimes} className="space-y-6">
+          {/* Campo de Tempo de Retirada */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Janela de Tempo de Retirada (minutos)
+            </label>
+            <div className="flex items-center gap-4">
               <input
                 type="number"
-                id="pickupTime"
-                value={pickupTime}
-                onChange={(e) => setPickupTime(e.target.value)}
+                placeholder="Mínimo"
+                value={pickupTimeMin}
+                onChange={(e) => setPickupTimeMin(e.target.value)}
                 disabled={loading}
-                className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm disabled:bg-gray-100"
+                className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm disabled:bg-gray-100"
               />
-            </div>
-            <div className="flex-1">
-              <label htmlFor="deliveryTime" className="block text-sm font-medium text-gray-700">
-                Tempo de Entrega (minutos)
-              </label>
+              <span>-</span>
               <input
                 type="number"
-                id="deliveryTime"
-                value={deliveryTime}
-                onChange={(e) => setDeliveryTime(e.target.value)}
+                placeholder="Máximo"
+                value={pickupTimeMax}
+                onChange={(e) => setPickupTimeMax(e.target.value)}
                 disabled={loading}
-                className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm disabled:bg-gray-100"
+                className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm disabled:bg-gray-100"
               />
             </div>
           </div>
+
+          {/* Campo de Tempo de Entrega */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Janela de Tempo de Entrega (minutos)
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                type="number"
+                placeholder="Mínimo"
+                value={deliveryTimeMin}
+                onChange={(e) => setDeliveryTimeMin(e.target.value)}
+                disabled={loading}
+                className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm disabled:bg-gray-100"
+              />
+              <span>-</span>
+              <input
+                type="number"
+                placeholder="Máximo"
+                value={deliveryTimeMax}
+                onChange={(e) => setDeliveryTimeMax(e.target.value)}
+                disabled={loading}
+                className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm disabled:bg-gray-100"
+              />
+            </div>
+          </div>
+          
           <div>
             <button
               type="submit"

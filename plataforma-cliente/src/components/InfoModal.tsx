@@ -1,8 +1,8 @@
 'use client';
 
 import { OperatingHour } from '@/lib/api';
-import { useStatus } from '@/components/StatusProvider'; // Importar para aceder ao status
-import { X, MapPin, Clock, Bike, Package } from 'lucide-react'; // Adicionar ícones de entrega
+import { useStatus } from '@/components/StatusProvider';
+import { X, MapPin, Clock, Bike, Package } from 'lucide-react';
 
 interface InfoModalProps {
   isOpen: boolean;
@@ -11,7 +11,6 @@ interface InfoModalProps {
 }
 
 const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
-  // Aceder aos dados de status (que contêm os tempos de entrega)
   const status = useStatus();
 
   if (!isOpen) return null;
@@ -30,7 +29,6 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
         <h2 className="text-2xl font-bold text-center mb-4">Informações da Pizzaria</h2>
         
         <div className="space-y-4">
-          {/* Nome e Endereço */}
           <div className="text-center">
             <p className="font-bold text-lg">Forneria 360</p>
             <div className="flex items-center justify-center gap-2 mt-1 text-gray-600">
@@ -39,7 +37,6 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
             </div>
           </div>
           
-          {/* --- NOVA SECÇÃO: TEMPO DE ENTREGA --- */}
           {status && (
             <div>
                 <h3 className="font-semibold text-center mb-3 border-t pt-4">
@@ -50,21 +47,22 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
                         <Bike size={18} className="text-gray-700" />
                         <div>
                             <span className="block font-medium">Entrega</span>
-                            <span className="text-gray-600">~{status.delivery_time_minutes} min</span>
+                            {/* --- ATUALIZAÇÃO AQUI --- */}
+                            <span className="text-gray-600">{status.delivery_time_min}-{status.delivery_time_max} min</span>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <Package size={18} className="text-gray-700" />
                         <div>
                             <span className="block font-medium">Retirada</span>
-                            <span className="text-gray-600">~{status.pickup_time_minutes} min</span>
+                            {/* --- ATUALIZAÇÃO AQUI --- */}
+                            <span className="text-gray-600">{status.pickup_time_min}-{status.pickup_time_max} min</span>
                         </div>
                     </div>
                 </div>
             </div>
           )}
 
-          {/* Horários de Funcionamento */}
           <div>
             <h3 className="font-semibold text-center mb-3 border-t pt-4">
               <Clock size={18} className="inline-block mr-2" />

@@ -52,8 +52,10 @@ export interface OrderItemPayload {
 
 export interface PizzeriaStatus {
   is_open: boolean;
-  pickup_time_minutes: number;
-  delivery_time_minutes: number;
+  pickup_time_min: number;
+  pickup_time_max: number;
+  delivery_time_min: number;
+  delivery_time_max: number;
 }
 
 export interface Pizza {
