@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast, Toaster } from 'react-hot-toast';
 import { Send } from 'lucide-react';
-import pix from 'pix-utils';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -29,7 +28,7 @@ export default function CheckoutPage() {
   const [couponApplied, setCouponApplied] = useState(false);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
-const whatsappNumber = "5532999413289"; 
+  const whatsappNumber = "5532999413289"; 
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -70,16 +69,105 @@ const whatsappNumber = "5532999413289";
     }
   };
 
-   const generatePixCode = () => {
-    const pixPayload = pix.buildPix({
-      pixKey: 'SUA_CHAVE_PIX_AQUI', // Ex: 'seu.email@provedor.com' ou um CNPJ
-      merchantName: 'CARLOS EDUARDO DA SILVA B', // Nome que aparecerá no app do banco
-      merchantCity: 'SAO JOAO DEL RE', // Cidade (sem acentos, máx 15 caracteres)
-      amount: parseFloat(total.toFixed(2)), // O valor da transação
-      transactionId: `PEDIDO${Date.now()}` // ID da transação (opcional, mas recomendado)
-    });
-    
-    setPixCode(pixPayload.payload());
+  // --- [ATUALIZADO] Usando o seu construtor manual de PIX ---
+  const generatePixCode = () => {
+    try {
+      // Validação inicial
+      if (total <= 0) {
+        toast.error('Valor inválido para gerar PIX');
+        return;
+      }
+
+      // Função para calcular CRC16 CCITT
+      const crc16 = (str: string) => {
+        let crc = 0xFFFF;
+        for (let i = 0; i < str.length; i++) {
+          crc ^= str.charCodeAt(i) << 8;
+          for (let j = 0; j < 8; j++) {
+            if (crc & 0x8000) {
+              crc = (crc << 1) ^ 0x1021;
+            } else {
+              crc <<= 1;
+            }
+            crc &= 0xFFFF; // Manter apenas 16 bits
+          }
+        }
+        return crc.toString(16).toUpperCase().padStart(4, '0');
+      };
+
+      // Função para formatar campo PIX (ID + Length + Value)
+      const formatField = (id: string, value: string) => {
+        const length = value.length.toString().padStart(2, '0');
+        return `${id}${length}${value}`;
+      };
+
+      // Dados do beneficiário
+      const pixKey = '59132299000180';
+      const merchantName = 'CARLOS EDUARDO DA SILVA'; // 25 caracteres max
+      const merchantCity = 'SAO JOAO DEL REI'; // 15 caracteres max
+      const amount = total.toFixed(2);
+      const transactionId = `PED${Date.now().toString().slice(-8)}`; // ID mais curto
+
+      console.log('Gerando PIX com dados:', {
+        pixKey,
+        merchantName: `${merchantName} (${merchantName.length} chars)`,
+        merchantCity: `${merchantCity} (${merchantCity.length} chars)`,
+        amount,
+        transactionId
+      });
+
+      // Construir payload PIX passo a passo
+      let payload = '';
+      
+      // 00 - Payload Format Indicator
+      payload += formatField('00', '01');
+      
+      // 01 - Point of Initiation Method
+      payload += formatField('01', '12');
+      
+      // 26 - Merchant Account Information (PIX)
+      const pixInfo = formatField('00', 'BR.GOV.BCB.PIX') + formatField('01', pixKey);
+      payload += formatField('26', pixInfo);
+      
+      // 52 - Merchant Category Code
+      payload += formatField('52', '0000');
+      
+      // 53 - Transaction Currency (986 = BRL)
+      payload += formatField('53', '986');
+      
+      // 54 - Transaction Amount
+      payload += formatField('54', amount);
+      
+      // 58 - Country Code
+      payload += formatField('58', 'BR');
+      
+      // 59 - Merchant Name
+      payload += formatField('59', merchantName);
+      
+      // 60 - Merchant City
+      payload += formatField('60', merchantCity);
+      
+      // 62 - Additional Data Field Template
+      const additionalData = formatField('05', transactionId);
+      payload += formatField('62', additionalData);
+      
+      // 63 - CRC16 (placeholder)
+      payload += '6304';
+      
+      // Calcular CRC16 e substituir placeholder
+      const crcValue = crc16(payload);
+      payload += crcValue;
+
+      console.log('PIX payload gerado:', payload);
+      console.log('Tamanho do payload:', payload.length);
+      
+      setPixCode(payload);
+      toast.success('Código PIX gerado com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro detalhado ao gerar PIX:', error);
+      toast.error('Erro ao gerar código PIX. Tente novamente.');
+    }
   };
   
   const handlePlaceOrder = async () => {
@@ -97,11 +185,7 @@ const whatsappNumber = "5532999413289";
       payment_method: paymentMethod,
       order_type: orderType,
       items: items.map(item => {
-        // --- [CORREÇÃO AQUI] ---
-        // A forma mais fiável de saber se é uma bebida é verificar se a propriedade 'stock_quantity' existe.
         const itemType = 'stock_quantity' in item.product ? 'drink' : 'pizza';
-        
-        // Garante que o preço é sempre um número
         const price = typeof item.product.price === 'number' ? item.product.price : parseFloat(item.product.price || '0');
 
         return {
@@ -110,7 +194,7 @@ const whatsappNumber = "5532999413289";
           item_name: item.product.name,
           quantity: item.quantity,
           price_per_item: price,
-          extras: item.extras || [], // Garante que 'extras' seja sempre um array
+          extras: item.extras || [],
         };
       }),
     };
@@ -138,19 +222,17 @@ const whatsappNumber = "5532999413289";
         <Toaster position="top-center" />
         <h1 className="text-2xl font-bold mb-4">Pague com PIX</h1>
         <p className="mb-4">Aponte a câmara do seu telemóvel para o QR Code abaixo.</p>
-        <div className="flex justify-center mb-4 p-4 bg-white rounded-lg shadow-md">
+        <div className="flex justify-center mb-4 p-4 bg-white inline-block rounded-lg shadow-md">
           <QRCodeCanvas value={pixCode} size={256} />
         </div>
         <p className="font-semibold mb-2">Ou use o PIX Copia e Cola:</p>
         <textarea readOnly value={pixCode} className="w-full max-w-md p-2 border rounded-md bg-gray-100 mb-6" />
         
-        {/* Aviso Importante */}
         <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-md my-6 max-w-md mx-auto text-left">
           <p className="font-bold">Atenção! O seu pedido precisa de confirmação.</p>
           <p className="text-sm mt-1">Para que o seu pedido entre na fila de preparação, por favor, **envie o comprovativo do PIX** para o nosso WhatsApp.</p>
         </div>
 
-        {/* Botão para Enviar Comprovativo */}
         <a 
           href={`https://wa.me/${whatsappNumber}?text=Olá!%20Estou%20enviando%20o%20comprovativo%20do%20meu%20pedido.`}
           target="_blank"

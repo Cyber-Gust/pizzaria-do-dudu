@@ -246,7 +246,7 @@ app.get('/api/orders', async (req, res) => {
       .from('orders')
       .select(`*, order_items (*)`)
       // A linha abaixo agora ignora tanto 'Finalizado' como 'Cancelado'
-      .not('status', 'in', '("Finalizado", "Cancelado")') 
+      .not('status', 'in', '("Finalizado,Cancelado")') 
       .order('created_at', { ascending: true });
     if (error) throw error;
     res.status(200).json(data);
