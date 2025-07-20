@@ -31,7 +31,6 @@ const HalfPizzaModal = ({ isOpen, onClose }: Props) => {
     if (half === 'first') {
       setFirstHalf(pizza);
     } else {
-      // Garante que o segundo sabor não seja igual ao primeiro
       if (firstHalf && firstHalf.id === pizza.id) {
         toast.error("Os sabores não podem ser iguais.");
         return;
@@ -50,21 +49,19 @@ const HalfPizzaModal = ({ isOpen, onClose }: Props) => {
       return;
     }
 
-    // Cria um objeto de produto customizado para a pizza meio a meio
     const halfAndHalfProduct = {
       id: `half-${firstHalf.id}-${secondHalf.id}`,
       name: `Meio a Meio: ${firstHalf.name} / ${secondHalf.name}`,
       price: calculatedPrice,
       description: `Uma metade de ${firstHalf.name} e outra de ${secondHalf.name}.`,
-      image_url: firstHalf.image_url, // Usa a imagem do primeiro sabor como padrão
+      image_url: firstHalf.image_url,
       is_available: true,
-      // Propriedades extras para identificar no carrinho
       type: 'half-and-half',
       flavor1: firstHalf,
       flavor2: secondHalf,
     };
 
-    addItem(halfAndHalfProduct as any); // Adiciona o produto customizado
+    addItem(halfAndHalfProduct as any);
     toast.success('Pizza Meio a Meio adicionada!');
     onClose();
     setFirstHalf(null);
@@ -75,18 +72,20 @@ const HalfPizzaModal = ({ isOpen, onClose }: Props) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col relative">
+      {/* --- ATUALIZAÇÃO 1: Tamanho do modal reduzido --- */}
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col relative">
         <button onClick={onClose} className="absolute -top-3 -right-3 bg-brand-red text-white rounded-full p-1 shadow-lg hover:scale-110 transition-transform z-20">
           <X size={24} />
         </button>
 
-        <h2 className="text-xl font-bold text-center p-4 border-b">Monte sua Pizza Meio a Meio</h2>
+        <h2 className="text-xl font-bold text-center p-4 border-b flex-shrink-0">Monte sua Pizza Meio a Meio</h2>
 
-        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+        {/* --- ATUALIZAÇÃO 2: Layout com rolagem aprimorada --- */}
+        <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
           {/* Coluna da Primeira Metade */}
-          <div className="flex flex-col border-r">
-            <h3 className="font-semibold text-center p-3 bg-gray-50">1º Sabor</h3>
-            <ul className="overflow-y-auto p-3 space-y-2">
+          <div className="flex flex-col w-full md:w-1/2 border-b md:border-b-0 md:border-r overflow-hidden">
+            <h3 className="font-semibold text-center p-3 bg-gray-50 flex-shrink-0">1º Sabor</h3>
+            <ul className="flex-grow overflow-y-auto p-3 space-y-2">
               {allPizzas.map(pizza => (
                 <li 
                   key={pizza.id} 
@@ -101,9 +100,9 @@ const HalfPizzaModal = ({ isOpen, onClose }: Props) => {
           </div>
 
           {/* Coluna da Segunda Metade */}
-          <div className={`flex flex-col ${!firstHalf ? 'opacity-50' : ''}`}>
-            <h3 className="font-semibold text-center p-3 bg-gray-50">2º Sabor</h3>
-            <ul className="overflow-y-auto p-3 space-y-2">
+          <div className={`flex flex-col w-full md:w-1/2 overflow-hidden ${!firstHalf ? 'opacity-50' : ''}`}>
+            <h3 className="font-semibold text-center p-3 bg-gray-50 flex-shrink-0">2º Sabor</h3>
+            <ul className="flex-grow overflow-y-auto p-3 space-y-2">
               {allPizzas.map(pizza => (
                 <li 
                   key={pizza.id} 
@@ -118,7 +117,7 @@ const HalfPizzaModal = ({ isOpen, onClose }: Props) => {
           </div>
         </div>
 
-        <div className="p-4 border-t mt-auto bg-gray-50">
+        <div className="p-4 border-t bg-gray-50 flex-shrink-0">
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm">
               <p><strong>1ª Metade:</strong> {firstHalf?.name || 'Nenhum'}</p>

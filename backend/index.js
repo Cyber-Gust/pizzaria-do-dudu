@@ -242,7 +242,7 @@ app.post('/api/status', async (req, res) => {
 // --- ROTAS DE PEDIDOS ---
 app.get('/api/orders', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('orders').select(`*, order_items (*)`).not('status', 'eq', 'Finalizado').order('created_at', { ascending: true });
+    const { data, error } = await supabase.from('orders').select(`*, order_items (*)`).not('status', 'eq', 'Finalizado', 'Cancelado').order('created_at', { ascending: true });
     if (error) throw error;
     res.status(200).json(data);
   } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }
@@ -800,6 +800,40 @@ app.get('/api/orders/:id/finalize', async (req, res) => {
     } catch (error) {
         res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
     }
+});
+
+// --- [NOVO] ROTA DE CLIENTES ---
+// Adicione esta rota ao seu backend/index.js
+
+app.post('/api/customers', async (req, res) => {
+  const { name, phone } = req.body;
+
+  if (!name || !phone) {
+    return res.status(400).json({ error: 'Nome e telefone são obrigatórios.' });
+  }
+
+  // Limpa o número de telefone para guardar um formato consistente
+  const sanitizedPhone = phone.replace(/\D/g, '');
+
+  try {
+    // A função "upsert" tenta atualizar se o telefone já existir,
+    // ou insere um novo registo se não existir.
+    const { data, error } = await supabase
+      .from('customers')
+      .upsert(
+        { name: name, phone: sanitizedPhone },
+        { onConflict: 'phone' } // A coluna 'phone' é usada para detetar conflitos
+      )
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    res.status(200).json({ message: 'Cliente salvo com sucesso!', data });
+  } catch (err) {
+    console.error('Erro ao salvar cliente:', err);
+    res.status(500).json({ error: 'Erro interno ao salvar o cliente.' });
+  }
 });
 
 // --- INICIALIZAÇÃO ---

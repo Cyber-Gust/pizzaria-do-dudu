@@ -39,10 +39,10 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
         
         <div className="relative z-10 text-center p-4">
           <h1 className="text-4xl md:text-6xl font-black mb-4 drop-shadow-lg">
-            Sabor que une.
+            A Verdadeira!
           </h1>
           <p className="text-lg md:text-xl mb-8 drop-shadow-md">
-            As melhores pizzas, feitas com os melhores ingredientes, direto para você.
+            A melhore pizza napolitana, feitas com os melhores ingredientes, direto para você.
           </p>
           <Link
             href="/cardapio"

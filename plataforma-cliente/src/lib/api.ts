@@ -212,3 +212,19 @@ export const getOperatingHours = async (): Promise<OperatingHour[]> => {
     return []; // Retorna um array vazio em caso de erro
   }
 };
+
+/**
+ * Salva ou atualiza os dados de um cliente no banco de dados.
+ * @param name - O nome do cliente.
+ * @param phone - O telefone do cliente.
+ */
+export const saveCustomer = async (name: string, phone: string) => {
+  try {
+    await apiClient.post('/customers', { name, phone });
+    console.log("Cliente salvo com sucesso no banco de dados.");
+  } catch (error) {
+    // Não mostramos um alerta ao utilizador, pois esta é uma operação de fundo.
+    // Apenas registamos o erro na consola.
+    console.error("Erro ao salvar dados do cliente:", error);
+  }
+};

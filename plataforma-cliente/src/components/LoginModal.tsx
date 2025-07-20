@@ -2,10 +2,9 @@
 
 import { useState } from 'react';
 import { useUserStore } from '@/store/userStore';
-// --- MUDANÇA IMPORTANTE AQUI ---
-// A importação deve ser de '@react-input/mask'
 import { InputMask } from '@react-input/mask';
 import { X } from 'lucide-react';
+import { saveCustomer } from '@/lib/api'; // Importar a nova função
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -17,10 +16,15 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
   const [phone, setPhone] = useState('');
   const login = useUserStore((state) => state.login);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name && phone.replace(/\D/g, '').length === 11) {
+      // Primeiro, faz o login na store local
       login(name, phone);
+      
+      // Depois, envia os dados para o backend para serem salvos (sem esperar pela resposta)
+      await saveCustomer(name, phone);
+      
       onClose();
     } else {
       alert('Por favor, preencha todos os campos corretamente.');

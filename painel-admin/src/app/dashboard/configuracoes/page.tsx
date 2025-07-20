@@ -276,7 +276,7 @@ export default function ConfiguracoesPage() {
           <h2 className="text-xl font-semibold text-gray-800">Gestão de Motoboys</h2>
           <button onClick={() => handleOpenMotoboyModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Motoboy</button>
         </div>
-        <div className="max-h-[25vh] overflow-y-auto">
+        <div className="max-h-[40vh] overflow-y-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
@@ -309,7 +309,7 @@ export default function ConfiguracoesPage() {
           <h2 className="text-xl font-semibold text-gray-800">Gestão de Adicionais</h2>
           <button onClick={() => handleOpenExtraModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Adicional</button>
         </div>
-        <div className="max-h-[25vh] overflow-y-auto">
+        <div className="max-h-[40vh] overflow-y-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
@@ -342,7 +342,7 @@ export default function ConfiguracoesPage() {
           <h2 className="text-xl font-semibold text-gray-800">Taxas de Entrega por Bairro</h2>
           <button onClick={() => handleOpenFeeModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Taxa</button>
         </div>
-        <div className="max-h-[25vh] overflow-y-auto">
+        <div className="max-h-[40vh] overflow-y-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
