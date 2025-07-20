@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast, Toaster } from 'react-hot-toast';
 import { Send } from 'lucide-react';
-import { PixPayload } from 'pix-payload';
+import pix from 'pix-utils';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -70,22 +70,18 @@ const whatsappNumber = "5532999413289";
     }
   };
 
-  const generatePixCode = () => {
-    const pixKey = '59132299000180'; // Ex: 'seu.email@provedor.com' ou um CNPJ
-    const merchantName = 'CARLOS EDUARDO DA SILVA BRAGA';
-    const merchantCity = 'SAO JOAO DEL REI'; // Máximo 15 caracteres
-
-    const pixPayload = PixPayload.staticPayload({
-      pixKey: pixKey,
-      merchantName: merchantName,
-      merchantCity: merchantCity,
-      amount: total.toFixed(2),
+   const generatePixCode = () => {
+    const pixPayload = pix.buildPix({
+      pixKey: 'SUA_CHAVE_PIX_AQUI', // Ex: 'seu.email@provedor.com' ou um CNPJ
+      merchantName: 'CARLOS EDUARDO DA SILVA B', // Nome que aparecerá no app do banco
+      merchantCity: 'SAO JOAO DEL RE', // Cidade (sem acentos, máx 15 caracteres)
+      amount: parseFloat(total.toFixed(2)), // O valor da transação
       transactionId: `PEDIDO${Date.now()}` // ID da transação (opcional, mas recomendado)
     });
     
-    setPixCode(pixPayload.getPayload());
+    setPixCode(pixPayload.payload());
   };
-
+  
   const handlePlaceOrder = async () => {
     if (orderType === 'delivery' && !address) {
       toast.error('Por favor, informe o endereço de entrega.');
