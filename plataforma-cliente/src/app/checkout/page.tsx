@@ -72,7 +72,7 @@ const whatsappNumber = "5532999413289";
 
   const generatePixCode = () => {
     const pixKey = '59132299000180'; // Ex: 'seu.email@provedor.com' ou um CNPJ
-    const merchantName = 'Forneria 360';
+    const merchantName = 'CARLOS EDUARDO DA SILVA BRAGA';
     const merchantCity = 'SAO JOAO DEL REI'; // Máximo 15 caracteres
 
     const pixPayload = PixPayload.staticPayload({
