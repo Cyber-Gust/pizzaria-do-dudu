@@ -101,18 +101,9 @@ const whatsappNumber = "5532999413289";
       payment_method: paymentMethod,
       order_type: orderType,
       items: items.map(item => {
-        // Lógica para determinar o tipo do item de forma mais robusta
-        let itemType: 'pizza' | 'drink' = 'pizza'; // Assume pizza como padrão
-        if ('type' in item.product && item.product.type === 'half-and-half') {
-          itemType = 'pizza';
-        } else if (!('description' in item.product)) { // Assumindo que bebidas podem não ter descrição detalhada
-          itemType = 'drink';
-        } else {
-            // Heurística para diferenciar: bebidas geralmente não têm adicionais
-            if(item.extras.length === 0 && (item.product.name.toLowerCase().includes('coca') || item.product.name.toLowerCase().includes('suco') || item.product.name.toLowerCase().includes('água'))) {
-                itemType = 'drink';
-            }
-        }
+        // --- [CORREÇÃO AQUI] ---
+        // A forma mais fiável de saber se é uma bebida é verificar se a propriedade 'stock_quantity' existe.
+        const itemType = 'stock_quantity' in item.product ? 'drink' : 'pizza';
 
         return {
           item_id: ('type' in item.product && item.product.type === 'half-and-half') ? null : item.product.id,
@@ -124,6 +115,7 @@ const whatsappNumber = "5532999413289";
         };
       }),
     };
+
 
     try {
       await createOrder(orderPayload);
