@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCartStore } from '@/store/cartStore';
 import { useUserStore } from '@/store/userStore';
 import { getDeliveryFees, createOrder, DeliveryFee, OrderPayload, validateCoupon } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast, Toaster } from 'react-hot-toast';
-import { Send } from 'lucide-react';
+import { Send, Copy } from 'lucide-react';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -29,6 +29,7 @@ export default function CheckoutPage() {
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const whatsappNumber = "5532999413289"; 
+  const pixTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -176,6 +177,15 @@ export default function CheckoutPage() {
     }
   };
 
+  // --- [NOVO] Função para copiar o código PIX ---
+  const handleCopyToClipboard = () => {
+    if (pixTextareaRef.current) {
+      pixTextareaRef.current.select();
+      document.execCommand('copy');
+      toast.success('Código PIX copiado!');
+    }
+  };
+
   if (pixCode) {
     return (
       <div className="container mx-auto p-4 text-center">
@@ -186,7 +196,23 @@ export default function CheckoutPage() {
           <QRCodeCanvas value={pixCode} size={256} />
         </div>
         <p className="font-semibold mb-2">Ou use o PIX Copia e Cola:</p>
-        <textarea readOnly value={pixCode} className="w-full max-w-md p-2 border rounded-md bg-gray-100 mb-6" />
+        
+        {/* --- [ATUALIZADO] Campo de Copia e Cola com botão --- */}
+        <div className="relative w-full max-w-md mx-auto">
+            <textarea 
+                ref={pixTextareaRef}
+                readOnly 
+                value={pixCode} 
+                className="w-full p-2 pr-12 border rounded-md bg-gray-100 mb-6" 
+            />
+            <button 
+                onClick={handleCopyToClipboard}
+                className="absolute top-2 right-2 p-2 text-gray-500 hover:bg-gray-200 rounded-md"
+                title="Copiar código"
+            >
+                <Copy size={20} />
+            </button>
+        </div>
         
         <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-md my-6 max-w-md mx-auto text-left">
           <p className="font-bold">Atenção! O seu pedido precisa de confirmação.</p>

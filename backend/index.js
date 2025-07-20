@@ -170,7 +170,7 @@ const handleIncomingMessage = async (from, incomingMsg) => {
                 break;
 
             default: // UNKNOWN
-                responseMsg = `Desculpe, não entendi. 🤔\n\nVocê pode tentar uma das opções abaixo:\n\n1️⃣ Para fazer um *pedido*, digite "pedido".\n2️⃣ Para ver nosso *horário*, digite "horário".\n3️⃣ Para saber nosso *endereço*, digite "endereço".`;
+                responseMsg = `Desculpe, não entendi. 🤔`;
                 break;
         }
 
