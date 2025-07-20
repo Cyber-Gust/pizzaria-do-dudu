@@ -242,10 +242,10 @@ app.post('/api/status', async (req, res) => {
 // --- ROTAS DE PEDIDOS ---
 app.get('/api/orders', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('orders')
+    const { data, error } = await supabase
+      .from('orders')
       .select(`*, order_items (*)`)
-      // --- CORREÇÃO AQUI ---
-      // Agora, ele ignora tanto 'Finalizado' como 'Cancelado'
+      // A linha abaixo agora ignora tanto 'Finalizado' como 'Cancelado'
       .not('status', 'in', '("Finalizado", "Cancelado")') 
       .order('created_at', { ascending: true });
     if (error) throw error;
@@ -343,7 +343,7 @@ app.post('/api/orders/:id', async (req, res) => {
                         }
                         return `  - ${item.quantity}x ${item.item_name}${extrasText}`;
                     }).join('\n');
-                    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(updatedOrder.address || '')}`;
+                    const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(updatedOrder.address || '')}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
                     const message = `*Novo Pedido para Entrega: #${updatedOrder.id}* 🛵\n\n*Cliente:* ${updatedOrder.customer_name}\n*Telefone:* ${updatedOrder.customer_phone}\n\n*Endereço:* ${updatedOrder.address}\n*Link do Mapa:* ${mapsLink}\n\n---\n*Itens:*\n${itemsList}\n---\n\n*Pagamento na Entrega:*\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Forma:* ${updatedOrder.payment_method}\n\n---\n👇 *AO ENTREGAR, CLIQUE AQUI:* 👇\n${finalizeLink}`;
                     await sendWhatsappMessage(motoboy.whatsapp_number, message);

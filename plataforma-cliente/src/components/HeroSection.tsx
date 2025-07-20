@@ -50,7 +50,7 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
             A Verdadeira!
           </h1>
           <p className="text-lg md:text-xl mb-8 drop-shadow-md">
-            A melhore pizza napolitana, feitas com os melhores ingredientes, direto para você.
+            A melhore pizza napolitana, feita com os melhores ingredientes, direto para você.
           </p>
           <Link
             href="/cardapio"
@@ -61,13 +61,7 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-black bg-opacity-40 z-10">
-          <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center text-sm gap-4">
-            <div className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-400" fill="currentColor" />
-              <span className="font-bold">4.8 de 5</span>
-              <span className="text-gray-300">(+200 avaliações)</span>
-            </div>
-            
+          <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center text-sm gap-4">           
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-400" fill="currentColor" />

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast, Toaster } from 'react-hot-toast';
 import { Send } from 'lucide-react';
+import { PixPayload } from 'pix-payload';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -70,17 +71,19 @@ const whatsappNumber = "5532999413289";
   };
 
   const generatePixCode = () => {
-    const payloadFormatIndicator = '01';
-    const merchantAccountInformation = '26' + '32' + '0014br.gov.bcb.pix' + '0111' + '59132299000180';
-    const merchantCategoryCode = '52040000';
-    const transactionCurrency = '5303986';
-    const countryCode = '5802BR';
-    const merchantName = '5918' + 'Forneria 360';
-    const merchantCity = '6009' + 'SAO JOAO DEL REI';
-    const transactionAmount = '54' + String(total.toFixed(2).length).padStart(2, '0') + total.toFixed(2);
-    const mainPayload = `0002${payloadFormatIndicator}${merchantAccountInformation}${merchantCategoryCode}${transactionCurrency}${transactionAmount}${countryCode}${merchantName}${merchantCity}`;
-    const crc16 = '6304' + 'A31A';
-    setPixCode(mainPayload + crc16);
+    const pixKey = '59132299000180'; // Ex: 'seu.email@provedor.com' ou um CNPJ
+    const merchantName = 'Forneria 360';
+    const merchantCity = 'SAO JOAO DEL REI'; // Máximo 15 caracteres
+
+    const pixPayload = PixPayload.staticPayload({
+      pixKey: pixKey,
+      merchantName: merchantName,
+      merchantCity: merchantCity,
+      amount: total.toFixed(2),
+      transactionId: `PEDIDO${Date.now()}` // ID da transação (opcional, mas recomendado)
+    });
+    
+    setPixCode(pixPayload.getPayload());
   };
 
   const handlePlaceOrder = async () => {

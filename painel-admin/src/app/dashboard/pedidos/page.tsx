@@ -183,19 +183,41 @@ export default function PedidosPage() {
   }, [isConnected, printerCharacteristic, formatOrderForPrinting]);
 
   useEffect(() => {
+    const handleRealtimeChange = (payload: any) => {
+      // Para novos pedidos, adicionamos à lista e imprimimos
+      if (payload.eventType === 'INSERT') {
+        const newOrder = payload.new as Order;
+        // É importante buscar os itens do pedido, pois eles podem não vir no payload inicial
+        supabase.from('order_items').select('*').eq('order_id', newOrder.id)
+          .then(({ data: items }) => {
+              const completeOrder = { ...newOrder, order_items: items as OrderItem[] };
+              setOrders((current) => [completeOrder, ...current.filter(o => o.id !== completeOrder.id)]);
+              audioRef.current?.play().catch(e => console.error("Erro ao tocar áudio:", e));
+              printOrder(completeOrder); // A sua função de impressão Bluetooth é chamada aqui
+          });
+      }
+      // Para atualizações, verificamos o novo status
+      if (payload.eventType === 'UPDATE') {
+        const updatedOrder = payload.new as Order;
+        // Se o pedido foi finalizado ou cancelado, removemo-lo da lista
+        if (updatedOrder.status === 'Finalizado' || updatedOrder.status === 'Cancelado') {
+            setOrders(current => current.filter(o => o.id !== updatedOrder.id));
+        } else {
+            // Caso contrário, apenas atualizamos o status na tela
+            setOrders(current => current.map(o => o.id === updatedOrder.id ? { ...o, status: updatedOrder.status } : o));
+        }
+      }
+    };
+
     const channel = supabase
       .channel('realtime-orders-page')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders' },
-        (payload) => {
-          const newOrder = payload.new as Order;
-          setOrders((current) => [newOrder, ...current]);
-          audioRef.current?.play().catch(e => console.error("Erro ao tocar áudio:", e));
-          printOrder(newOrder);
-        }
+        { event: '*', schema: 'public', table: 'orders' }, // Ouve todos os eventos (*), não apenas INSERT
+        handleRealtimeChange
       )
       .subscribe();
+      
     return () => {
       supabase.removeChannel(channel);
     };

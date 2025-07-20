@@ -15,6 +15,11 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
 
   if (!isOpen) return null;
 
+  const formatTime = (time: string | null) => {
+    if (!time) return '';
+    return time.substring(0, 5); // Pega apenas os 5 primeiros caracteres (HH:MM)
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
       <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md relative">
@@ -74,7 +79,7 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
                   <span className="font-medium">{day.day_name}</span>
                   {day.is_open ? (
                     <span className="font-semibold text-green-600">
-                      {day.open_time} - {day.close_time}
+                      {formatTime(day.open_time)} - {formatTime(day.close_time)}
                     </span>
                   ) : (
                     <span className="font-semibold text-red-500">Fechado</span>
