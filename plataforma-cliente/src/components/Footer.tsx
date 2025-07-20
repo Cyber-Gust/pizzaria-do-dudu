@@ -5,10 +5,10 @@ import { MessageCircle, MapPin } from 'lucide-react';
 const Footer = () => {
   // --- ATENÇÃO: Substitua estes links pelos seus dados reais ---
   // Coloque o link do WhatsApp da sua pizzaria aqui
-  const whatsappLink = "https://wa.me/5532999999999?text=Olá!%20Gostaria%20de%20fazer%20um%20pedido.";
+  const whatsappLink = "https://wa.me/5532999413289?text=Olá!%20Gostaria%20de%20fazer%20um%20pedido.";
   
   // Coloque o link do Google Maps da sua pizzaria aqui
-  const mapsLink = "https://www.google.com/maps/place/Sua+Pizzaria";
+  const mapsLink = "https://maps.app.goo.gl/gpYDEwjQ4XfnbEnNA";
 
   return (
     // Rodapé com fundo "branco gelo" e uma borda superior sutil

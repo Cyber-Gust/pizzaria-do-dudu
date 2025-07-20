@@ -12,6 +12,7 @@ type Order = {
   status: string;
   final_price: number;
   order_type: string;
+  payment_method: string;
   created_at: string;
   order_items: OrderItem[];
 };
@@ -59,7 +60,7 @@ export default function PedidosPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [printerCharacteristic, setPrinterCharacteristic] = useState<BluetoothRemoteGATTCharacteristic | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -97,29 +98,70 @@ export default function PedidosPage() {
     fetchData();
   }, [fetchData]);
 
-  const formatOrderForPrinting = (order: Order): string => {
-    let receipt = '';
-    receipt += '      FORNERIA 360\n';
-    receipt += '--------------------------------\n';
-    receipt += `Pedido: #${order.id}\n`;
-    receipt += `Data: ${new Date(order.created_at).toLocaleString('pt-BR')}\n`;
-    receipt += `Cliente: ${order.customer_name || 'N/A'}\n`;
-    receipt += `Tipo: ${order.order_type}\n`;
-    receipt += '--------------------------------\n';
-    receipt += 'Itens:\n';
+   const formatOrderForPrinting = (order: Order): string => {
+    // Usamos HTML e CSS inline para criar um recibo bem formatado
+    const styles = {
+        page: `width: 80mm; font-family: 'Courier New', monospace; font-size: 12px; color: #000;`,
+        header: `text-align: center;`,
+        title: `font-size: 16px; font-weight: bold; margin: 0;`,
+        info: `border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 5px 0; margin: 10px 0;`,
+        infoLine: `display: flex; justify-content: space-between;`,
+        itemsHeader: `font-weight: bold; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px;`,
+        item: `display: flex;`,
+        itemName: `flex-grow: 1;`,
+        itemPrice: `text-align: right;`,
+        extras: `font-size: 10px; color: #555; padding-left: 15px;`,
+        total: `font-size: 18px; font-weight: bold; text-align: right; border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;`
+    };
+
+    let itemsHtml = '';
     (order.order_items || []).forEach(item => {
         const itemTotal = (item.quantity * item.price_per_item).toFixed(2);
-        receipt += `${item.quantity}x ${item.item_name.padEnd(18)} R$${itemTotal.padStart(6)}\n`;
+        itemsHtml += `
+            <div style="${styles.item}">
+                <div style="${styles.itemName}">${item.quantity}x ${item.item_name}</div>
+                <div style="${styles.itemPrice}">R$ ${itemTotal}</div>
+            </div>
+        `;
         if (item.selected_extras && item.selected_extras.length > 0) {
             item.selected_extras.forEach(extra => {
-                receipt += `  + ${extra.name}\n`;
+                itemsHtml += `<div style="${styles.extras}">+ ${extra.name}</div>`;
             });
         }
     });
-    receipt += '--------------------------------\n';
-    receipt += `Total: R$ ${order.final_price.toFixed(2)}\n\n`;
-    receipt += '\n\n\n'; 
-    return receipt;
+
+    return `
+      <html>
+        <head>
+          <title>Pedido #${order.id}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="${styles.page}">
+            <div style="${styles.header}">
+              <p style="${styles.title}">FORNERIA 360</p>
+            </div>
+            <div style="${styles.info}">
+              <div style="${styles.infoLine}"><span>Pedido:</span><span>#${order.id}</span></div>
+              <div style="${styles.infoLine}"><span>Data:</span><span>${new Date(order.created_at).toLocaleString('pt-BR')}</span></div>
+              <div style="${styles.infoLine}"><span>Cliente:</span><span>${order.customer_name || 'N/A'}</span></div>
+              <div style="${styles.infoLine}"><span>Tipo:</span><span style="font-weight: bold;">${order.order_type.toUpperCase()}</span></div>
+              <div style="${styles.infoLine}"><span>Pagamento:</span><span style="font-weight: bold;">${order.payment_method.toUpperCase()}</span></div>
+            </div>
+            <div style="${styles.itemsHeader}">Itens</div>
+            ${itemsHtml}
+            <div style="${styles.total}">
+              <span>Total:</span>
+              <span>R$ ${order.final_price.toFixed(2)}</span>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   const printOrder = useCallback(async (order: Order) => {
@@ -318,9 +360,20 @@ export default function PedidosPage() {
               </div>
               <span className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full">{order.status}</span>
             </div>
+            {/* --- [ATUALIZADO] Detalhes do Pedido --- */}
             <div className="mt-4 border-t pt-4">
-              <p><strong>Tipo:</strong> <span className="font-semibold capitalize">{order.order_type || 'Não definido'}</span></p>
-              <p className="font-bold text-lg">Total: R$ {order.final_price.toFixed(2).replace('.', ',')}</p>
+              <div className="flex justify-between items-baseline">
+                <div>
+                  <p><strong>Tipo:</strong> <span className="font-semibold capitalize">{order.order_type || 'Não definido'}</span></p>
+                  <p><strong>Pagamento:</strong> <span className={`font-bold capitalize ${order.payment_method === 'pix' ? 'text-cyan-600' : 'text-gray-700'}`}>{order.payment_method}</span></p>
+                </div>
+                <p className="font-bold text-lg">Total: R$ {order.final_price.toFixed(2).replace('.', ',')}</p>
+              </div>
+              {order.payment_method === 'pix' && (
+                <div className="mt-2 p-2 bg-cyan-50 text-cyan-700 text-sm rounded-md border border-cyan-200">
+                  <strong>Atenção:</strong> Pedido via PIX. Verifique o recebimento do comprovativo.
+                </div>
+              )}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
                 <button onClick={() => updateOrderStatus(order.id, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>

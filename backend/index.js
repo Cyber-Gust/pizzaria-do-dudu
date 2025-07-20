@@ -158,11 +158,11 @@ const handleIncomingMessage = async (from, incomingMsg) => {
                 break;
 
             case 'ADDRESS':
-                responseMsg = `Claro! Nosso endereço é:\n\n*Rua Fictícia, 123 - Centro, Sua Cidade*\n\nVocê pode ver no mapa e traçar a rota clicando aqui: https://www.google.com/maps/place/Sua+Pizzaria`;
+                responseMsg = `Claro! Nosso endereço é:\n\n*R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nVocê pode ver no mapa e traçar a rota clicando aqui: https://maps.app.goo.gl/hBVn4nBZVSS5pWoa9`;
                 break;
             
             case 'GREETING':
-                 responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n1️⃣ Para fazer um *pedido*, digite "pedido".\n2️⃣ Para ver nosso *horário*, digite "horário".\n3️⃣ Para saber nosso *endereço*, digite "endereço".`;
+                 responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n`;
                  break;
 
             case 'THANKS':
@@ -242,7 +242,12 @@ app.post('/api/status', async (req, res) => {
 // --- ROTAS DE PEDIDOS ---
 app.get('/api/orders', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('orders').select(`*, order_items (*)`).not('status', 'eq', 'Finalizado', 'Cancelado').order('created_at', { ascending: true });
+    const { data, error } = await supabase.from('orders')
+      .select(`*, order_items (*)`)
+      // --- CORREÇÃO AQUI ---
+      // Agora, ele ignora tanto 'Finalizado' como 'Cancelado'
+      .not('status', 'in', '("Finalizado", "Cancelado")') 
+      .order('created_at', { ascending: true });
     if (error) throw error;
     res.status(200).json(data);
   } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }

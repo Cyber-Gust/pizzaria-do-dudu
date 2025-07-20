@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import LoginModal from './LoginModal';
 import InfoModal from './InfoModal';
 import { OperatingHour } from '@/lib/api'; // Importar a tipagem
+import { toast } from 'react-hot-toast';
 
 // --- CORREÇÃO AQUI ---
 // Definimos que este componente receberá uma propriedade chamada 'operatingHours'
@@ -25,6 +26,13 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true) }, []);
 
+  const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review";
+  const handleReviewClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isAuthenticated) {
+      e.preventDefault();
+      toast.error("Você precisa estar logado para deixar uma avaliação.");
+    }
+  };
   return (
     <>
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
@@ -58,6 +66,23 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
               <Star className="h-5 w-5 text-yellow-400" fill="currentColor" />
               <span className="font-bold">4.8 de 5</span>
               <span className="text-gray-300">(+200 avaliações)</span>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-400" fill="currentColor" />
+                <span className="font-bold">4.8 de 5</span>
+                <span className="text-gray-300 hidden sm:inline">(+200 avaliações)</span>
+              </div>
+              <a 
+                href={googleReviewLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleReviewClick}
+                className="font-bold px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-xs"
+              >
+                Avaliar
+              </a>
             </div>
             
             <div className="flex items-center gap-4">

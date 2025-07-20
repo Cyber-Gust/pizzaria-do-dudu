@@ -7,6 +7,7 @@ import { getDeliveryFees, createOrder, DeliveryFee, OrderPayload, validateCoupon
 import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast, Toaster } from 'react-hot-toast';
+import { Send } from 'lucide-react';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -26,6 +27,8 @@ export default function CheckoutPage() {
   const [discount, setDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+
+const whatsappNumber = "5532999413289"; 
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -68,12 +71,12 @@ export default function CheckoutPage() {
 
   const generatePixCode = () => {
     const payloadFormatIndicator = '01';
-    const merchantAccountInformation = '26' + '32' + '0014br.gov.bcb.pix' + '0111' + 'SUA_CHAVE_PIX';
+    const merchantAccountInformation = '26' + '32' + '0014br.gov.bcb.pix' + '0111' + '59132299000180';
     const merchantCategoryCode = '52040000';
     const transactionCurrency = '5303986';
     const countryCode = '5802BR';
-    const merchantName = '5918' + 'Pizzaria do Dudo';
-    const merchantCity = '6009' + 'SAO PAULO';
+    const merchantName = '5918' + 'Forneria 360';
+    const merchantCity = '6009' + 'SAO JOAO DEL REI';
     const transactionAmount = '54' + String(total.toFixed(2).length).padStart(2, '0') + total.toFixed(2);
     const mainPayload = `0002${payloadFormatIndicator}${merchantAccountInformation}${merchantCategoryCode}${transactionCurrency}${transactionAmount}${countryCode}${merchantName}${merchantCity}`;
     const crc16 = '6304' + 'A31A';
@@ -140,18 +143,37 @@ export default function CheckoutPage() {
       <div className="container mx-auto p-4 text-center">
         <Toaster position="top-center" />
         <h1 className="text-2xl font-bold mb-4">Pague com PIX</h1>
-        <p className="mb-4">Aponte a câmera do seu celular para o QR Code abaixo.</p>
-        <div className="flex justify-center mb-4 p-4 bg-white rounded-lg">
+        <p className="mb-4">Aponte a câmara do seu telemóvel para o QR Code abaixo.</p>
+        <div className="flex justify-center mb-4 p-4 bg-white rounded-lg shadow-md">
           <QRCodeCanvas value={pixCode} size={256} />
         </div>
         <p className="font-semibold mb-2">Ou use o PIX Copia e Cola:</p>
         <textarea readOnly value={pixCode} className="w-full max-w-md p-2 border rounded-md bg-gray-100 mb-6" />
-        <button onClick={() => { clearCart(); router.push('/'); }} className="bg-green-500 text-white font-bold py-3 px-6 rounded-md">
-          Já paguei, Finalizar!
+        
+        {/* Aviso Importante */}
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-md my-6 max-w-md mx-auto text-left">
+          <p className="font-bold">Atenção! O seu pedido precisa de confirmação.</p>
+          <p className="text-sm mt-1">Para que o seu pedido entre na fila de preparação, por favor, **envie o comprovativo do PIX** para o nosso WhatsApp.</p>
+        </div>
+
+        {/* Botão para Enviar Comprovativo */}
+        <a 
+          href={`https://wa.me/${whatsappNumber}?text=Olá!%20Estou%20enviando%20o%20comprovativo%20do%20meu%20pedido.`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 bg-green-500 text-white font-bold py-3 px-6 rounded-md hover:bg-green-600 transition-colors"
+        >
+          <Send size={18} />
+          Enviar Comprovativo via WhatsApp
+        </a>
+
+        <button onClick={() => { clearCart(); router.push('/'); }} className="block mx-auto mt-4 text-sm text-gray-600 hover:underline">
+          Concluir e voltar ao início
         </button>
       </div>
     );
   }
+
 
   return (
     <div className="container mx-auto p-4">
