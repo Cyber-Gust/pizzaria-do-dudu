@@ -101,17 +101,19 @@ const whatsappNumber = "5532999413289";
       payment_method: paymentMethod,
       order_type: orderType,
       items: items.map(item => {
-        // --- [CORREÇÃO AQUI] ---
         // A forma mais fiável de saber se é uma bebida é verificar se a propriedade 'stock_quantity' existe.
         const itemType = 'stock_quantity' in item.product ? 'drink' : 'pizza';
+        
+        // Garante que o preço é sempre um número
+        const price = typeof item.product.price === 'number' ? item.product.price : parseFloat(item.product.price || '0');
 
         return {
           item_id: ('type' in item.product && item.product.type === 'half-and-half') ? null : item.product.id,
           item_type: itemType,
           item_name: item.product.name,
           quantity: item.quantity,
-          price_per_item: item.product.price,
-          extras: item.extras,
+          price_per_item: price,
+          extras: item.extras || [], // Garante que 'extras' seja sempre um array
         };
       }),
     };
