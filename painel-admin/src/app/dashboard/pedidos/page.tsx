@@ -370,7 +370,7 @@ export default function PedidosPage() {
         </div>
       </div>
       
-      <audio ref={audioRef} src="https://cdn.freesound.org/previews/253/253887_3900301-lq.mp3" preload="auto"></audio>
+      <audio ref={audioRef} src="/notificacao.mp3" preload="auto"></audio>
       
       <div className="space-y-4">
         {orders.map((order) => (
