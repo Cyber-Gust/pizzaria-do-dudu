@@ -130,8 +130,9 @@ export default function PedidosPage() {
         `;
     });
 
+    // Adiciona a secção de observações apenas se existirem
     let observationsHtml = '';
-    if (order.observations) {
+    if (order.observations && order.observations.trim() !== '') {
         observationsHtml = `
             <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
                 <div style="font-weight: bold;">Observações:</div>
@@ -145,7 +146,7 @@ export default function PedidosPage() {
         <head>
           <title>Pedido #${order.id}</title>
           <style>
-            @page { size: 58mm auto; margin: 1mm; }
+            @page { size: 58mm auto; margin: 3mm; }
             body { font-family: 'Courier New', monospace; font-size: 10px; color: #000; width: 52mm; }
             .header, .total-section { text-align: center; }
             .header h1 { font-size: 16px; margin: 0; }
