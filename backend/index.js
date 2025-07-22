@@ -253,23 +253,26 @@ app.post('/api/status', async (req, res) => {
 });
 
 // --- ROTAS DE PEDIDOS ---
+
+// [CORRIGIDO] Rota para buscar os pedidos ativos
 app.get('/api/orders', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('orders')
       .select(`*, order_items (*)`)
-      // A linha abaixo agora ignora tanto 'Finalizado' como 'Cancelado'
-      .not('status', 'in', '("Finalizado")') 
-      .not('status', 'in', '("Cancelado")') 
+      // A linha abaixo agora ignora tanto 'Finalizado' como 'Cancelado' de forma mais eficiente
+      .not('status', 'in', '("Finalizado", "Cancelado")') 
       .order('created_at', { ascending: true });
     if (error) throw error;
     res.status(200).json(data);
   } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }
 });
 
-// [ATUALIZADO] Rota para criar um novo pedido (manual ou via cliente)
+// [CORRIGIDO] Rota para criar um novo pedido (manual ou via cliente)
 app.post('/api/orders', async (req, res) => {
-    const { items, discount_amount = 0, delivery_fee = 0, ...orderDetails } = req.body;
+    // Extrai 'observations' explicitamente do corpo da requisição
+    const { items, discount_amount = 0, delivery_fee = 0, observations, ...orderDetails } = req.body;
+    
     if (!items || !orderDetails.order_type) {
         return res.status(400).json({ error: 'Dados do pedido incompletos.' });
     }
@@ -285,6 +288,7 @@ app.post('/api/orders', async (req, res) => {
             .from('orders')
             .insert({ 
                 ...orderDetails, 
+                observations: observations, // Garante que as observações são salvas
                 total_price: itemsTotal, 
                 discount_amount: discount_amount,
                 final_price: finalPrice,
@@ -350,7 +354,6 @@ app.post('/api/orders/:id', async (req, res) => {
             if (motoboyId) {
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
                 if (motoboy && motoboy.whatsapp_number) {
-                    // --- [CORREÇÃO] Adicionada verificação de segurança ---
                     const itemsList = Array.isArray(updatedOrder.order_items) 
                         ? updatedOrder.order_items.map(item => {
                             let extrasText = '';
@@ -359,7 +362,7 @@ app.post('/api/orders/:id', async (req, res) => {
                             }
                             return `  - ${item.quantity}x ${item.item_name}${extrasText}`;
                         }).join('\n')
-                        : 'Itens não detalhados.'; // Fallback caso os itens não carreguem
+                        : 'Itens não detalhados.';
 
                     const cleanAddress = (updatedOrder.address || '').split('(Taxa:')[0].trim();
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
@@ -372,7 +375,6 @@ app.post('/api/orders/:id', async (req, res) => {
         }
         res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
     } catch (error) { 
-        // --- [MELHORIA] Log de erro mais detalhado ---
         console.error(`Erro detalhado ao atualizar o pedido #${id}:`, error);
         res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); 
     }
