@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { Bell, BellOff } from 'lucide-react';
 
 // Tipagens
 type ExtraItem = { id: string; name: string; price: number };
@@ -15,13 +16,13 @@ type Order = {
   payment_method: string;
   created_at: string;
   order_items: OrderItem[];
+  observations: string | null; // Adicionado para observações
 };
 type Motoboy = { id: string; name: string; };
 type Product = { id: string; name: string; price: number; item_type: 'pizza' | 'drink' };
 type Extra = { id: string; price: number; ingredients: { name: string } };
-type DeliveryFee = { id: string; neighborhood_name: string; fee_amount: number; }; // Nova tipagem
+type DeliveryFee = { id: string; neighborhood_name: string; fee_amount: number; };
 
-// Tipagem para os itens dentro do novo pedido
 type NewOrderItem = {
     item_id: string;
     item_name: string;
@@ -38,8 +39,9 @@ const initialNewOrderState = {
   order_type: 'pickup',
   payment_method: 'cash',
   items: [] as NewOrderItem[],
-  discount_amount: 0, // Novo campo
-  delivery_fee: 0,    // Novo campo
+  discount_amount: 0,
+  delivery_fee: 0,
+  observations: '', // Adicionado
 };
 
 export default function PedidosPage() {
@@ -47,20 +49,17 @@ export default function PedidosPage() {
   const [motoboys, setMotoboys] = useState<Motoboy[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [extras, setExtras] = useState<Extra[]>([]);
-  const [deliveryFees, setDeliveryFees] = useState<DeliveryFee[]>([]); // Novo estado
+  const [deliveryFees, setDeliveryFees] = useState<DeliveryFee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   const [motoboyModal, setMotoboyModal] = useState<{ isOpen: boolean, order: Order | null }>({ isOpen: false, order: null });
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [newOrderData, setNewOrderData] = useState(initialNewOrderState);
 
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [printerCharacteristic, setPrinterCharacteristic] = useState<BluetoothRemoteGATTCharacteristic | null>(null);
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -73,7 +72,7 @@ export default function PedidosPage() {
         fetch(`${API_URL}/api/pizzas`),
         fetch(`${API_URL}/api/drinks`),
         fetch(`${API_URL}/api/extras`),
-        fetch(`${API_URL}/api/delivery-fees`), // Buscar taxas
+        fetch(`${API_URL}/api/delivery-fees`),
       ]);
       if (!ordersRes.ok || !motoboysRes.ok || !pizzasRes.ok || !drinksRes.ok || !extrasRes.ok || !feesRes.ok) throw new Error('Falha ao carregar dados.');
       
@@ -83,7 +82,7 @@ export default function PedidosPage() {
       const drinksData = (await drinksRes.json()).map((d: Product) => ({ ...d, item_type: 'drink' as const }));
       setProducts([...pizzasData, ...drinksData]);
       setExtras(await extrasRes.json());
-      setDeliveryFees(await feesRes.json()); // Salvar taxas no estado
+      setDeliveryFees(await feesRes.json());
 
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -98,112 +97,138 @@ export default function PedidosPage() {
     fetchData();
   }, [fetchData]);
 
-   const formatOrderForPrinting = (order: Order): string => {
-    // Usamos HTML e CSS inline para criar um recibo bem formatado
-    const styles = {
-        page: `width: 80mm; font-family: 'Courier New', monospace; font-size: 12px; color: #000;`,
-        header: `text-align: center;`,
-        title: `font-size: 16px; font-weight: bold; margin: 0;`,
-        info: `border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 5px 0; margin: 10px 0;`,
-        infoLine: `display: flex; justify-content: space-between;`,
-        itemsHeader: `font-weight: bold; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px;`,
-        item: `display: flex;`,
-        itemName: `flex-grow: 1;`,
-        itemPrice: `text-align: right;`,
-        extras: `font-size: 10px; color: #555; padding-left: 15px;`,
-        total: `font-size: 18px; font-weight: bold; text-align: right; border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;`
-    };
-
+  // --- [ATUALIZADO] LÓGICA DE IMPRESSÃO COM OBSERVAÇÕES ---
+  const formatOrderForPrinting = (order: Order): string => {
     let itemsHtml = '';
     (order.order_items || []).forEach(item => {
         const itemTotal = (item.quantity * item.price_per_item).toFixed(2);
         itemsHtml += `
-            <div style="${styles.item}">
-                <div style="${styles.itemName}">${item.quantity}x ${item.item_name}</div>
-                <div style="${styles.itemPrice}">R$ ${itemTotal}</div>
-            </div>
+            <tr>
+                <td style="text-align: left; vertical-align: top;">${item.quantity}x</td>
+                <td style="padding-left: 5px;">
+                    ${item.item_name}
         `;
         if (item.selected_extras && item.selected_extras.length > 0) {
+            itemsHtml += `<div style="font-size: 10px; color: #333;">`;
             item.selected_extras.forEach(extra => {
-                itemsHtml += `<div style="${styles.extras}">+ ${extra.name}</div>`;
+                itemsHtml += `<div>+ ${extra.name}</div>`;
             });
+            itemsHtml += `</div>`;
         }
+        itemsHtml += `
+                </td>
+                <td style="text-align: right; vertical-align: top;">R$${itemTotal}</td>
+            </tr>
+        `;
     });
+
+    // Adiciona a secção de observações apenas se existirem
+    let observationsHtml = '';
+    if (order.observations) {
+        observationsHtml = `
+            <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
+                <div style="font-weight: bold;">Observações:</div>
+                <div>${order.observations}</div>
+            </div>
+        `;
+    }
 
     return `
       <html>
         <head>
           <title>Pedido #${order.id}</title>
           <style>
-            @media print {
-              body { margin: 0; }
-            }
+            @page { size: 58mm auto; margin: 3mm; }
+            body { font-family: 'Courier New', monospace; font-size: 10px; color: #000; width: 52mm; }
+            .header, .total-section { text-align: center; }
+            .header h1 { font-size: 16px; margin: 0; }
+            .info-table, .items-table { width: 100%; border-collapse: collapse; }
+            .info-table td { padding: 1px 0; }
+            .items-table { margin-top: 10px; }
+            .items-table th { border-bottom: 1px dashed #000; text-align: left; padding-bottom: 3px; }
+            .items-table td { padding: 3px 0; }
+            .total { font-size: 14px; font-weight: bold; margin-top: 10px; border-top: 1px dashed #000; padding-top: 5px; display: flex; justify-content: space-between; }
           </style>
         </head>
         <body>
-          <div style="${styles.page}">
-            <div style="${styles.header}">
-              <p style="${styles.title}">FORNERIA 360</p>
-            </div>
-            <div style="${styles.info}">
-              <div style="${styles.infoLine}"><span>Pedido:</span><span>#${order.id}</span></div>
-              <div style="${styles.infoLine}"><span>Data:</span><span>${new Date(order.created_at).toLocaleString('pt-BR')}</span></div>
-              <div style="${styles.infoLine}"><span>Cliente:</span><span>${order.customer_name || 'N/A'}</span></div>
-              <div style="${styles.infoLine}"><span>Tipo:</span><span style="font-weight: bold;">${order.order_type.toUpperCase()}</span></div>
-              <div style="${styles.infoLine}"><span>Pagamento:</span><span style="font-weight: bold;">${order.payment_method.toUpperCase()}</span></div>
-            </div>
-            <div style="${styles.itemsHeader}">Itens</div>
-            ${itemsHtml}
-            <div style="${styles.total}">
-              <span>Total:</span>
-              <span>R$ ${order.final_price.toFixed(2)}</span>
-            </div>
+          <div class="header">
+            <h1>FORNERIA 360</h1>
+          </div>
+          <table class="info-table">
+            <tr><td>Pedido:</td><td style="text-align: right;">#${order.id}</td></tr>
+            <tr><td>Data:</td><td style="text-align: right;">${new Date(order.created_at).toLocaleString('pt-BR')}</td></tr>
+            <tr><td>Cliente:</td><td style="text-align: right;">${order.customer_name || 'N/A'}</td></tr>
+            <tr><td>Tipo:</td><td style="text-align: right; font-weight: bold;">${order.order_type.toUpperCase()}</td></tr>
+            <tr><td>Pagamento:</td><td style="text-align: right; font-weight: bold;">${order.payment_method.toUpperCase()}</td></tr>
+          </table>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width: 10%;">Qtd</th>
+                <th style="width: 60%;">Item</th>
+                <th style="width: 30%; text-align: right;">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          ${observationsHtml}
+          <div class="total">
+            <span>Total:</span>
+            <span>R$ ${order.final_price.toFixed(2)}</span>
           </div>
         </body>
       </html>
     `;
   };
 
-  const printOrder = useCallback(async (order: Order) => {
-    if (!isConnected || !printerCharacteristic) {
-        console.log('Impressora não conectada. O pedido não será impresso.');
-        return;
+  const handlePrint = useCallback((order: Order) => {
+    const receiptHtml = formatOrderForPrinting(order);
+    const printWindow = window.open('', '_blank');
+    
+    if (printWindow) {
+        printWindow.document.write(receiptHtml);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    } else {
+        alert('Por favor, permita pop-ups para imprimir o pedido.');
     }
-    try {
-        const receiptText = formatOrderForPrinting(order);
-        const encoder = new TextEncoder();
-        const data = encoder.encode(receiptText);
-        await printerCharacteristic.writeValue(data);
-        console.log(`Pedido #${order.id} enviado para a impressora.`);
-    } catch (err) {
-        console.error('Erro ao imprimir:', err);
-        alert('Erro ao enviar pedido para a impressora. Tente reconectar.');
-        setIsConnected(false);
-    }
-  }, [isConnected, printerCharacteristic, formatOrderForPrinting]);
+  }, []);
+
+  const enableSound = () => {
+    audioRef.current?.play().then(() => {
+        audioRef.current?.pause();
+        setSoundEnabled(true);
+        alert('As notificações sonoras foram ativadas!');
+    }).catch(e => {
+        console.error("Erro ao tentar ativar o áudio:", e);
+        alert('O seu navegador bloqueou a ativação automática do som.');
+    });
+  };
 
   useEffect(() => {
     const handleRealtimeChange = (payload: any) => {
-      // Para novos pedidos, adicionamos à lista e imprimimos
       if (payload.eventType === 'INSERT') {
         const newOrder = payload.new as Order;
-        // É importante buscar os itens do pedido, pois eles podem não vir no payload inicial
         supabase.from('order_items').select('*').eq('order_id', newOrder.id)
           .then(({ data: items }) => {
               const completeOrder = { ...newOrder, order_items: items as OrderItem[] };
               setOrders((current) => [completeOrder, ...current.filter(o => o.id !== completeOrder.id)]);
-              audioRef.current?.play().catch(e => console.error("Erro ao tocar áudio:", e));
-              printOrder(completeOrder); // A sua função de impressão Bluetooth é chamada aqui
+              if (soundEnabled) {
+                audioRef.current?.play().catch(e => console.error("Erro ao tocar áudio:", e));
+              }
           });
       }
-      // Para atualizações, verificamos o novo status
       if (payload.eventType === 'UPDATE') {
         const updatedOrder = payload.new as Order;
-        // Se o pedido foi finalizado ou cancelado, removemo-lo da lista
         if (updatedOrder.status === 'Finalizado' || updatedOrder.status === 'Cancelado') {
             setOrders(current => current.filter(o => o.id !== updatedOrder.id));
         } else {
-            // Caso contrário, apenas atualizamos o status na tela
             setOrders(current => current.map(o => o.id === updatedOrder.id ? { ...o, status: updatedOrder.status } : o));
         }
       }
@@ -213,7 +238,7 @@ export default function PedidosPage() {
       .channel('realtime-orders-page')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' }, // Ouve todos os eventos (*), não apenas INSERT
+        { event: '*', schema: 'public', table: 'orders' },
         handleRealtimeChange
       )
       .subscribe();
@@ -221,36 +246,10 @@ export default function PedidosPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, printOrder]);
+  }, [supabase, soundEnabled]);
 
-  const handleConnectPrinter = async () => {
-    setIsConnecting(true);
-    try {
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'],
-      });
-      const server = await device.gatt?.connect();
-      const service = await server?.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service?.getCharacteristic('00001101-0000-1000-8000-00805f9b34fb');
-      if (characteristic) {
-        setPrinterCharacteristic(characteristic);
-        setIsConnected(true);
-      }
-    } catch (err) {
-      console.error("Falha ao conectar à impressora:", err);
-      alert('Não foi possível conectar à impressora.');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
 
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
-    if (newStatus === 'Finalizado' || newStatus === 'Cancelado') {
-      setOrders(current => current.filter(o => o.id !== orderId));
-    } else {
-      setOrders(current => current.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-    }
     try {
       const body = motoboyId ? { newStatus, motoboyId } : { newStatus };
       await fetch(`${API_URL}/api/orders/${orderId}`, {
@@ -283,7 +282,6 @@ export default function PedidosPage() {
         try {
             const response = await fetch(`${API_URL}/api/orders/${orderId}/cancel`, { method: 'POST' });
             if (!response.ok) throw new Error('Falha ao cancelar o pedido.');
-            setOrders(current => current.filter(o => o.id !== orderId));
             alert('Pedido cancelado com sucesso.');
         } catch (err: any) {
             alert(`Erro ao cancelar pedido: ${err.message}`);
@@ -361,11 +359,15 @@ export default function PedidosPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Pedidos Ativos</h1>
         <div className="flex items-center space-x-3">
+            <button 
+              onClick={enableSound}
+              className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
+              title={soundEnabled ? 'Notificações sonoras ativadas' : 'Clique para ativar as notificações sonoras'}
+            >
+              {soundEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+            </button>
             <button onClick={() => setIsNewOrderModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">
               Gerar Novo Pedido
-            </button>
-            <button onClick={handleConnectPrinter} disabled={isConnecting || isConnected} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400">
-                {isConnecting ? 'A conectar...' : (isConnected ? 'Conectada' : 'Conectar Impressora')}
             </button>
         </div>
       </div>
@@ -382,7 +384,6 @@ export default function PedidosPage() {
               </div>
               <span className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full">{order.status}</span>
             </div>
-            {/* --- [ATUALIZADO] Detalhes do Pedido --- */}
             <div className="mt-4 border-t pt-4">
               <div className="flex justify-between items-baseline">
                 <div>
@@ -405,7 +406,7 @@ export default function PedidosPage() {
                   <button onClick={() => updateOrderStatus(order.id, 'Pronto para Retirada')} className="px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm">Pronto para Retirada</button>
                 )}
                 <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar Pedido</button>
-                <button onClick={() => printOrder(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
+                <button onClick={() => handlePrint(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
                 <button onClick={() => handleCancelOrder(order.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Cancelar</button>
             </div>
           </div>
@@ -457,6 +458,16 @@ export default function PedidosPage() {
                         </select>
                     </div>
                 )}
+                {/* [NOVO] Campo de Observações no Modal */}
+                <div>
+                    <label className="text-sm font-medium">Observações</label>
+                    <textarea 
+                        placeholder="Ex: Pizza sem cebola, troco para R$50, etc."
+                        value={newOrderData.observations}
+                        onChange={e => setNewOrderData({...newOrderData, observations: e.target.value})}
+                        className="w-full p-2 border rounded mt-1 h-20"
+                    />
+                </div>
                 <div>
                     <label className="text-sm font-medium">Itens do Pedido</label>
                     <div className="flex gap-2 mt-1">
