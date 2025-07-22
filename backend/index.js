@@ -15,6 +15,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+const META_WABA_CERTIFICATE = process.env.META_WABA_CERTIFICATE;
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
 
 const app = express();
@@ -30,6 +31,18 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
+// --- [NOVO] ROTA DE VERIFICAÇÃO DO NÚMERO DE TELEFONE ---
+// Esta rota é usada pela Meta para confirmar que você é o dono deste backend.
+app.get('/api/meta-verification', (req, res) => {
+    const certificate = META_WABA_CERTIFICATE;
+    if (certificate) {
+        // Envia o conteúdo do certificado como texto simples
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(certificate);
+    } else {
+        res.status(404).send('Certificado de verificação não encontrado.');
+    }
+});
 
 // --- FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS (CORRIGIDA) ---
 const sendWhatsappMessage = async (to, body) => {
