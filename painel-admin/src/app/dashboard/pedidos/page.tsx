@@ -3,10 +3,18 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Bell, BellOff } from 'lucide-react';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 // Tipagens
 type ExtraItem = { id: string; name: string; price: number };
-type OrderItem = { item_name: string; quantity: number; price_per_item: number; selected_extras?: ExtraItem[] };
+
+type OrderItem = {
+  item_name: string;
+  quantity: number;
+  price_per_item: number;
+  selected_extras?: ExtraItem[];
+};
+
 type Order = {
   id: number;
   customer_name: string;
@@ -16,8 +24,9 @@ type Order = {
   payment_method: string;
   created_at: string;
   order_items: OrderItem[];
-  observations: string | null; // Adicionado para observações
+  observations: string | null;
 };
+
 type Motoboy = { id: string; name: string; };
 type Product = { id: string; name: string; price: number; item_type: 'pizza' | 'drink' };
 type Extra = { id: string; price: number; ingredients: { name: string } };
@@ -41,7 +50,7 @@ const initialNewOrderState = {
   items: [] as NewOrderItem[],
   discount_amount: 0,
   delivery_fee: 0,
-  observations: '', // Adicionado
+  observations: '',
 };
 
 export default function PedidosPage() {
@@ -97,7 +106,6 @@ export default function PedidosPage() {
     fetchData();
   }, [fetchData]);
 
-  // --- [ATUALIZADO] LÓGICA DE IMPRESSÃO COM OBSERVAÇÕES ---
   const formatOrderForPrinting = (order: Order): string => {
     let itemsHtml = '';
     (order.order_items || []).forEach(item => {
@@ -122,7 +130,6 @@ export default function PedidosPage() {
         `;
     });
 
-    // Adiciona a secção de observações apenas se existirem
     let observationsHtml = '';
     if (order.observations) {
         observationsHtml = `
@@ -211,25 +218,51 @@ export default function PedidosPage() {
     });
   };
 
+  // --- CÓDIGO ATUALIZADO E CORRIGIDO ---
   useEffect(() => {
-    const handleRealtimeChange = (payload: any) => {
+    const handleRealtimeChange = async (payload: RealtimePostgresChangesPayload<Order>) => {
+      // Lógica para INSERIR um novo pedido
       if (payload.eventType === 'INSERT') {
-        const newOrder = payload.new as Order;
-        supabase.from('order_items').select('*').eq('order_id', newOrder.id)
-          .then(({ data: items }) => {
-              const completeOrder = { ...newOrder, order_items: items as OrderItem[] };
-              setOrders((current) => [completeOrder, ...current.filter(o => o.id !== completeOrder.id)]);
-              if (soundEnabled) {
-                audioRef.current?.play().catch(e => console.error("Erro ao tocar áudio:", e));
-              }
-          });
+        try {
+          const newOrder = payload.new;
+
+          const { data: items, error } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', newOrder.id)
+            .returns<OrderItem[]>(); // Tipagem explícita do retorno
+
+          if (error) {
+            console.error('Falha ao buscar itens do pedido:', error);
+            return;
+          }
+
+          const completeOrder: Order = { ...newOrder, order_items: items || [] };
+
+          setOrders((current) => [completeOrder, ...current.filter(o => o.id !== completeOrder.id)]);
+
+          if (soundEnabled) {
+            audioRef.current?.play().catch(e => console.error('Erro ao tocar áudio:', e));
+          }
+
+        } catch (e) {
+          console.error('Erro inesperado no evento de INSERT:', e);
+        }
       }
+
+      // Lógica para ATUALIZAR um pedido existente
       if (payload.eventType === 'UPDATE') {
-        const updatedOrder = payload.new as Order;
+        const updatedOrder = payload.new;
+
         if (updatedOrder.status === 'Finalizado' || updatedOrder.status === 'Cancelado') {
-            setOrders(current => current.filter(o => o.id !== updatedOrder.id));
+          setOrders(current => current.filter(o => o.id !== updatedOrder.id));
         } else {
-            setOrders(current => current.map(o => o.id === updatedOrder.id ? { ...o, status: updatedOrder.status } : o));
+          // Atualiza o pedido com todos os novos dados, garantindo a sincronia
+          setOrders(current =>
+            current.map(order =>
+              order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
+            )
+          );
         }
       }
     };
@@ -246,7 +279,7 @@ export default function PedidosPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, soundEnabled]);
+  }, [supabase, soundEnabled]); // Dependências do useEffect
 
 
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
@@ -273,8 +306,8 @@ export default function PedidosPage() {
 
   const handleAssignMotoboy = (motoboyId: string) => {
     if (!motoboyModal.order) return;
-    setMotoboyModal({ isOpen: false, order: null });
     updateOrderStatus(motoboyModal.order.id, 'Saiu para Entrega', motoboyId);
+    setMotoboyModal({ isOpen: false, order: null });
   };
 
   const handleCancelOrder = async (orderId: number) => {
@@ -294,6 +327,7 @@ export default function PedidosPage() {
     if (!extra) return;
     const updatedItems = [...newOrderData.items];
     const currentExtras = updatedItems[itemIndex].extras || [];
+    // Supondo que `extra.ingredients.name` é o nome desejado
     updatedItems[itemIndex].extras = [...currentExtras, { id: extra.id, name: extra.ingredients.name, price: extra.price }];
     setNewOrderData(prev => ({ ...prev, items: updatedItems }));
   };
@@ -338,12 +372,15 @@ export default function PedidosPage() {
         const response = await fetch(`${API_URL}/api/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newOrderData)
+            body: JSON.stringify({ ...newOrderData, final_price: newOrderTotal }),
         });
-        if (!response.ok) throw new Error('Falha ao criar o pedido.');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Falha ao criar o pedido.');
+        }
         setIsNewOrderModalOpen(false);
         setNewOrderData(initialNewOrderState);
-        fetchData();
+        // Não precisa chamar fetchData() aqui, o realtime já vai atualizar
     } catch (err) {
         if (err instanceof Error) {
             alert(`Erro ao criar pedido: ${err.message}`);
@@ -351,11 +388,11 @@ export default function PedidosPage() {
     }
   };
 
-  if (loading) return <p>A carregar pedidos...</p>;
+  if (loading) return <p className="p-4 text-center">A carregar pedidos...</p>;
   if (error) return <p className="text-red-500 bg-red-100 p-4 rounded-lg">Erro: {error}</p>;
 
   return (
-    <div>
+    <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Pedidos Ativos</h1>
         <div className="flex items-center space-x-3">
@@ -434,22 +471,23 @@ export default function PedidosPage() {
             <form onSubmit={handleSaveNewOrder} className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
                 <h2 className="text-2xl font-bold mb-4">Gerar Novo Pedido Manual</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" placeholder="Nome do Cliente" value={newOrderData.customer_name} onChange={e => setNewOrderData({...newOrderData, customer_name: e.target.value})} className="w-full p-2 border rounded" />
+                    <input type="text" placeholder="Nome do Cliente" value={newOrderData.customer_name} onChange={e => setNewOrderData({...newOrderData, customer_name: e.target.value})} className="w-full p-2 border rounded" required />
                     <input type="text" placeholder="Telefone/WhatsApp" value={newOrderData.customer_phone} onChange={e => setNewOrderData({...newOrderData, customer_phone: e.target.value})} className="w-full p-2 border rounded" />
                 </div>
                 <div>
                     <label className="text-sm font-medium">Tipo de Pedido</label>
-                    <div className="flex gap-4 mt-1"><label><input type="radio" name="order_type" value="pickup" checked={newOrderData.order_type === 'pickup'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Retirada</label><label><input type="radio" name="order_type" value="delivery" checked={newOrderData.order_type === 'delivery'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Entrega</label></div>
+                    <div className="flex gap-4 mt-1"><label className="flex items-center gap-2"><input type="radio" name="order_type" value="pickup" checked={newOrderData.order_type === 'pickup'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Retirada</label><label className="flex items-center gap-2"><input type="radio" name="order_type" value="delivery" checked={newOrderData.order_type === 'delivery'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Entrega</label></div>
                 </div>
                 {newOrderData.order_type === 'delivery' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" placeholder="Endereço de Entrega" value={newOrderData.address} onChange={e => setNewOrderData({...newOrderData, address: e.target.value})} className="w-full p-2 border rounded" />
+                        <input type="text" placeholder="Endereço de Entrega" value={newOrderData.address} onChange={e => setNewOrderData({...newOrderData, address: e.target.value})} className="w-full p-2 border rounded" required />
                         <select 
                             value={newOrderData.delivery_fee} 
                             onChange={e => setNewOrderData({...newOrderData, delivery_fee: parseFloat(e.target.value)})}
                             className="w-full p-2 border rounded"
+                            required
                         >
-                            <option value={0}>Selecione a taxa...</option>
+                            <option value={0} disabled>Selecione a taxa...</option>
                             {deliveryFees.map(fee => (
                                 <option key={fee.id} value={fee.fee_amount}>
                                     {fee.neighborhood_name} - R$ {fee.fee_amount.toFixed(2)}
@@ -458,7 +496,6 @@ export default function PedidosPage() {
                         </select>
                     </div>
                 )}
-                {/* [NOVO] Campo de Observações no Modal */}
                 <div>
                     <label className="text-sm font-medium">Observações</label>
                     <textarea 
@@ -494,7 +531,7 @@ export default function PedidosPage() {
                                     </div>
                                     <div className="mt-1 space-y-1">
                                         {item.extras.map((extra, extraIndex) => (
-                                            <div key={extra.id} className="flex justify-between items-center text-xs text-gray-600">
+                                            <div key={`${extra.id}-${extraIndex}`} className="flex justify-between items-center text-xs text-gray-600">
                                                 <span>+ {extra.name}</span>
                                                 <button type="button" onClick={() => handleRemoveExtraFromItem(index, extraIndex)} className="text-red-400 hover:text-red-600">remover</button>
                                             </div>
