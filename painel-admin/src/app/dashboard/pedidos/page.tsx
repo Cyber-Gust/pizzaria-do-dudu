@@ -125,23 +125,22 @@ export default function PedidosPage() {
         `;
     });
 
-    let observationsHtml = '';
-    if (order.observations && order.observations.trim() !== '') {
-        observationsHtml = `
-            <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
-                <div style="font-weight: bold;">Observações:</div>
-                <div>${order.observations}</div>
-            </div>
-        `;
-    }
-
-    // Adiciona o endereço se for um pedido de entrega
     let addressHtml = '';
     if (order.order_type === 'delivery' && order.address) {
         addressHtml = `
             <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
                 <div style="font-weight: bold;">Endereço de Entrega:</div>
-                <div>${order.address}</div>
+                <div style="font-size: 12px;">${order.address}</div>
+            </div>
+        `;
+    }
+    
+    let observationsHtml = '';
+    if (order.observations && order.observations.trim() !== '') {
+        observationsHtml = `
+            <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
+                <div style="font-weight: bold;">Observações:</div>
+                <div style="font-size: 12px;">${order.observations}</div>
             </div>
         `;
     }
