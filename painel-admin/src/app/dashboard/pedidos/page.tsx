@@ -14,6 +14,7 @@ type Order = {
   final_price: number;
   order_type: string;
   payment_method: string;
+  address: string | null; // Adicionado para o endereço
   created_at: string;
   order_items: OrderItem[];
   observations: string | null;
@@ -58,10 +59,10 @@ export default function PedidosPage() {
   const [motoboyModal, setMotoboyModal] = useState<{ isOpen: boolean, order: Order | null }>({ isOpen: false, order: null });
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [newOrderData, setNewOrderData] = useState(initialNewOrderState);
-
+  
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -99,6 +100,7 @@ export default function PedidosPage() {
     fetchData();
   }, [fetchData]);
 
+  // --- [ATUALIZADO] LÓGICA DE IMPRESSÃO COM ENDEREÇO ---
   const formatOrderForPrinting = (order: Order): string => {
     let itemsHtml = '';
     (order.order_items || []).forEach(item => {
@@ -133,6 +135,17 @@ export default function PedidosPage() {
         `;
     }
 
+    // Adiciona o endereço se for um pedido de entrega
+    let addressHtml = '';
+    if (order.order_type === 'delivery' && order.address) {
+        addressHtml = `
+            <div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;">
+                <div style="font-weight: bold;">Endereço de Entrega:</div>
+                <div>${order.address}</div>
+            </div>
+        `;
+    }
+
     return `
       <html>
         <head>
@@ -158,6 +171,7 @@ export default function PedidosPage() {
             <tr><td>Tipo:</td><td style="text-align: right; font-weight: bold;">${order.order_type.toUpperCase()}</td></tr>
             <tr><td>Pagamento:</td><td style="text-align: right; font-weight: bold;">${order.payment_method.toUpperCase()}</td></tr>
           </table>
+          ${addressHtml}
           <table class="items-table">
             <thead>
               <tr>
@@ -366,7 +380,7 @@ export default function PedidosPage() {
       
       <div className="space-y-4">
         {orders.map((order) => (
-          <div key={order.id} className="bg-white p-5 rounded-lg shadow-md">
+          <div key={order.id} className="bg-white p-5 rounded-lg shadow-md transition-all duration-300">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Pedido #{order.id}</h2>
@@ -374,6 +388,7 @@ export default function PedidosPage() {
               </div>
               <span className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full">{order.status}</span>
             </div>
+            
             <div className="mt-4 border-t pt-4">
               <div className="flex justify-between items-baseline">
                 <div>
@@ -387,7 +402,8 @@ export default function PedidosPage() {
                   <strong>Atenção:</strong> Pedido via PIX. Verifique o recebimento do comprovativo.
                 </div>
               )}
-              {/* --- [NOVO] Secção de Detalhes Expansível --- */}
+            </div>
+
             {expandedOrderId === order.id && (
                 <div className="mt-4 pt-4 border-t border-dashed">
                     <h4 className="font-semibold text-gray-700 mb-2">Itens do Pedido:</h4>
@@ -411,18 +427,18 @@ export default function PedidosPage() {
                     )}
                 </div>
             )}
-            </div>
+
             <div className="mt-4 flex flex-wrap gap-2 items-center">
                 <button onClick={() => updateOrderStatus(order.id, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>
-                {order.order_type && order.order_type.toLowerCase() === 'delivery' ? (
+                {order.order_type === 'delivery' ? (
                   <button onClick={() => handleUpdateStatus(order, 'Saiu para Entrega')} className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">Saiu para Entrega</button>
                 ) : (
                   <button onClick={() => updateOrderStatus(order.id, 'Pronto para Retirada')} className="px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm">Pronto para Retirada</button>
                 )}
-                <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar Pedido</button>
+                <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar</button>
                 <button onClick={() => handlePrint(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
                 <button onClick={() => handleCancelOrder(order.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Cancelar</button>
-            
+                
                 <button 
                     onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
                     className="ml-auto p-1 text-gray-500 hover:bg-gray-100 rounded-full"
