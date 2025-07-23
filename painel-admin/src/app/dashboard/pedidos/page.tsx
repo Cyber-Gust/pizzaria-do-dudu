@@ -3,10 +3,21 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Bell, BellOff } from 'lucide-react';
+<<<<<<< HEAD
+=======
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
 
 // Tipagens
 type ExtraItem = { id: string; name: string; price: number };
-type OrderItem = { item_name: string; quantity: number; price_per_item: number; selected_extras?: ExtraItem[] };
+
+type OrderItem = {
+  item_name: string;
+  quantity: number;
+  price_per_item: number;
+  selected_extras?: ExtraItem[];
+};
+
 type Order = {
   id: number;
   customer_name: string;
@@ -16,8 +27,13 @@ type Order = {
   payment_method: string;
   created_at: string;
   order_items: OrderItem[];
+<<<<<<< HEAD
   observations: string | null; // Adicionado para observações
+=======
+  observations: string | null;
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
 };
+
 type Motoboy = { id: string; name: string; };
 type Product = { id: string; name: string; price: number; item_type: 'pizza' | 'drink' };
 type Extra = { id: string; price: number; ingredients: { name: string } };
@@ -41,7 +57,11 @@ const initialNewOrderState = {
   items: [] as NewOrderItem[],
   discount_amount: 0,
   delivery_fee: 0,
+<<<<<<< HEAD
   observations: '', // Adicionado
+=======
+  observations: '',
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
 };
 
 export default function PedidosPage() {
@@ -59,7 +79,11 @@ export default function PedidosPage() {
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [newOrderData, setNewOrderData] = useState(initialNewOrderState);
 
+<<<<<<< HEAD
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
+=======
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -121,6 +145,10 @@ export default function PedidosPage() {
         `;
     });
 
+<<<<<<< HEAD
+=======
+    // Adiciona a secção de observações apenas se existirem
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
     let observationsHtml = '';
     if (order.observations && order.observations.trim() !== '') {
         observationsHtml = `
@@ -138,7 +166,12 @@ export default function PedidosPage() {
           <style>
             @page { size: 58mm auto; margin: 3mm; }
             body { font-family: 'Courier New', monospace; font-size: 10px; color: #000; width: 52mm; }
+<<<<<<< HEAD
             .header h1 { font-size: 16px; margin: 0; text-align: center; }
+=======
+            .header, .total-section { text-align: center; }
+            .header h1 { font-size: 16px; margin: 0; }
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
             .info-table, .items-table { width: 100%; border-collapse: collapse; }
             .info-table td { padding: 1px 0; }
             .items-table { margin-top: 10px; }
@@ -148,7 +181,13 @@ export default function PedidosPage() {
           </style>
         </head>
         <body>
+<<<<<<< HEAD
           <div class="header"><h1>FORNERIA 360</h1></div>
+=======
+          <div class="header">
+            <h1>FORNERIA 360</h1>
+          </div>
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
           <table class="info-table">
             <tr><td>Pedido:</td><td style="text-align: right;">#${order.id}</td></tr>
             <tr><td>Data:</td><td style="text-align: right;">${new Date(order.created_at).toLocaleString('pt-BR')}</td></tr>
@@ -159,6 +198,7 @@ export default function PedidosPage() {
           <table class="items-table">
             <thead>
               <tr>
+<<<<<<< HEAD
                 <th style="width: 10%;">Qtd</th><th style="width: 60%;">Item</th><th style="width: 30%; text-align: right;">Valor</th>
               </tr>
             </thead>
@@ -166,6 +206,22 @@ export default function PedidosPage() {
           </table>
           ${observationsHtml}
           <div class="total"><span>Total:</span><span>R$ ${order.final_price.toFixed(2)}</span></div>
+=======
+                <th style="width: 10%;">Qtd</th>
+                <th style="width: 60%;">Item</th>
+                <th style="width: 30%; text-align: right;">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          ${observationsHtml}
+          <div class="total">
+            <span>Total:</span>
+            <span>R$ ${order.final_price.toFixed(2)}</span>
+          </div>
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
         </body>
       </html>
     `;
@@ -187,6 +243,20 @@ export default function PedidosPage() {
         alert('Por favor, permita pop-ups para imprimir o pedido.');
     }
   }, []);
+<<<<<<< HEAD
+
+  const enableSound = () => {
+    audioRef.current?.play().then(() => {
+        audioRef.current?.pause();
+        setSoundEnabled(true);
+        alert('As notificações sonoras foram ativadas!');
+    }).catch(e => {
+        console.error("Erro ao tentar ativar o áudio:", e);
+        alert('O seu navegador bloqueou a ativação automática do som.');
+    });
+  };
+=======
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
 
   const enableSound = () => {
     audioRef.current?.play().then(() => {
@@ -199,7 +269,9 @@ export default function PedidosPage() {
     });
   };
 
+  // --- CÓDIGO ATUALIZADO E CORRIGIDO ---
   useEffect(() => {
+<<<<<<< HEAD
     const handleRealtimeChange = (payload: any) => {
       if (payload.eventType === 'INSERT') {
         const newOrder = payload.new as Order;
@@ -214,10 +286,55 @@ export default function PedidosPage() {
       }
       if (payload.eventType === 'UPDATE') {
         const updatedOrder = payload.new as Order;
+=======
+    const handleRealtimeChange = async (payload: RealtimePostgresChangesPayload<Order>) => {
+      // Lógica para INSERIR um novo pedido
+      if (payload.eventType === 'INSERT') {
+        try {
+          const newOrder = payload.new;
+
+          const { data: items, error } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', newOrder.id)
+            .returns<OrderItem[]>(); // Tipagem explícita do retorno
+
+          if (error) {
+            console.error('Falha ao buscar itens do pedido:', error);
+            return;
+          }
+
+          const completeOrder: Order = { ...newOrder, order_items: items || [] };
+
+          setOrders((current) => [completeOrder, ...current.filter(o => o.id !== completeOrder.id)]);
+
+          if (soundEnabled) {
+            audioRef.current?.play().catch(e => console.error('Erro ao tocar áudio:', e));
+          }
+
+        } catch (e) {
+          console.error('Erro inesperado no evento de INSERT:', e);
+        }
+      }
+
+      // Lógica para ATUALIZAR um pedido existente
+      if (payload.eventType === 'UPDATE') {
+        const updatedOrder = payload.new;
+
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
         if (updatedOrder.status === 'Finalizado' || updatedOrder.status === 'Cancelado') {
-            setOrders(current => current.filter(o => o.id !== updatedOrder.id));
+          setOrders(current => current.filter(o => o.id !== updatedOrder.id));
         } else {
+<<<<<<< HEAD
             setOrders(current => current.map(o => o.id === updatedOrder.id ? { ...o, status: updatedOrder.status } : o));
+=======
+          // Atualiza o pedido com todos os novos dados, garantindo a sincronia
+          setOrders(current =>
+            current.map(order =>
+              order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
+            )
+          );
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
         }
       }
     };
@@ -234,7 +351,11 @@ export default function PedidosPage() {
     return () => {
       supabase.removeChannel(channel);
     };
+<<<<<<< HEAD
   }, [supabase, soundEnabled]);
+=======
+  }, [supabase, soundEnabled]); // Dependências do useEffect
+>>>>>>> 5a8ac0edae89361cacfa187d28b48b396f655b7a
 
 
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
@@ -261,8 +382,8 @@ export default function PedidosPage() {
 
   const handleAssignMotoboy = (motoboyId: string) => {
     if (!motoboyModal.order) return;
-    setMotoboyModal({ isOpen: false, order: null });
     updateOrderStatus(motoboyModal.order.id, 'Saiu para Entrega', motoboyId);
+    setMotoboyModal({ isOpen: false, order: null });
   };
 
   const handleCancelOrder = async (orderId: number) => {
@@ -282,6 +403,7 @@ export default function PedidosPage() {
     if (!extra) return;
     const updatedItems = [...newOrderData.items];
     const currentExtras = updatedItems[itemIndex].extras || [];
+    // Supondo que `extra.ingredients.name` é o nome desejado
     updatedItems[itemIndex].extras = [...currentExtras, { id: extra.id, name: extra.ingredients.name, price: extra.price }];
     setNewOrderData(prev => ({ ...prev, items: updatedItems }));
   };
@@ -326,12 +448,15 @@ export default function PedidosPage() {
         const response = await fetch(`${API_URL}/api/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newOrderData)
+            body: JSON.stringify({ ...newOrderData, final_price: newOrderTotal }),
         });
-        if (!response.ok) throw new Error('Falha ao criar o pedido.');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Falha ao criar o pedido.');
+        }
         setIsNewOrderModalOpen(false);
         setNewOrderData(initialNewOrderState);
-        fetchData();
+        // Não precisa chamar fetchData() aqui, o realtime já vai atualizar
     } catch (err) {
         if (err instanceof Error) {
             alert(`Erro ao criar pedido: ${err.message}`);
@@ -339,11 +464,11 @@ export default function PedidosPage() {
     }
   };
 
-  if (loading) return <p>A carregar pedidos...</p>;
+  if (loading) return <p className="p-4 text-center">A carregar pedidos...</p>;
   if (error) return <p className="text-red-500 bg-red-100 p-4 rounded-lg">Erro: {error}</p>;
 
   return (
-    <div>
+    <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Pedidos Ativos</h1>
         <div className="flex items-center space-x-3">
@@ -422,22 +547,23 @@ export default function PedidosPage() {
             <form onSubmit={handleSaveNewOrder} className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
                 <h2 className="text-2xl font-bold mb-4">Gerar Novo Pedido Manual</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" placeholder="Nome do Cliente" value={newOrderData.customer_name} onChange={e => setNewOrderData({...newOrderData, customer_name: e.target.value})} className="w-full p-2 border rounded" />
+                    <input type="text" placeholder="Nome do Cliente" value={newOrderData.customer_name} onChange={e => setNewOrderData({...newOrderData, customer_name: e.target.value})} className="w-full p-2 border rounded" required />
                     <input type="text" placeholder="Telefone/WhatsApp" value={newOrderData.customer_phone} onChange={e => setNewOrderData({...newOrderData, customer_phone: e.target.value})} className="w-full p-2 border rounded" />
                 </div>
                 <div>
                     <label className="text-sm font-medium">Tipo de Pedido</label>
-                    <div className="flex gap-4 mt-1"><label><input type="radio" name="order_type" value="pickup" checked={newOrderData.order_type === 'pickup'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Retirada</label><label><input type="radio" name="order_type" value="delivery" checked={newOrderData.order_type === 'delivery'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Entrega</label></div>
+                    <div className="flex gap-4 mt-1"><label className="flex items-center gap-2"><input type="radio" name="order_type" value="pickup" checked={newOrderData.order_type === 'pickup'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Retirada</label><label className="flex items-center gap-2"><input type="radio" name="order_type" value="delivery" checked={newOrderData.order_type === 'delivery'} onChange={e => setNewOrderData({...newOrderData, order_type: e.target.value})} /> Entrega</label></div>
                 </div>
                 {newOrderData.order_type === 'delivery' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" placeholder="Endereço de Entrega" value={newOrderData.address} onChange={e => setNewOrderData({...newOrderData, address: e.target.value})} className="w-full p-2 border rounded" />
+                        <input type="text" placeholder="Endereço de Entrega" value={newOrderData.address} onChange={e => setNewOrderData({...newOrderData, address: e.target.value})} className="w-full p-2 border rounded" required />
                         <select 
                             value={newOrderData.delivery_fee} 
                             onChange={e => setNewOrderData({...newOrderData, delivery_fee: parseFloat(e.target.value)})}
                             className="w-full p-2 border rounded"
+                            required
                         >
-                            <option value={0}>Selecione a taxa...</option>
+                            <option value={0} disabled>Selecione a taxa...</option>
                             {deliveryFees.map(fee => (
                                 <option key={fee.id} value={fee.fee_amount}>
                                     {fee.neighborhood_name} - R$ {fee.fee_amount.toFixed(2)}
@@ -481,7 +607,7 @@ export default function PedidosPage() {
                                     </div>
                                     <div className="mt-1 space-y-1">
                                         {item.extras.map((extra, extraIndex) => (
-                                            <div key={extra.id} className="flex justify-between items-center text-xs text-gray-600">
+                                            <div key={`${extra.id}-${extraIndex}`} className="flex justify-between items-center text-xs text-gray-600">
                                                 <span>+ {extra.name}</span>
                                                 <button type="button" onClick={() => handleRemoveExtraFromItem(index, extraIndex)} className="text-red-400 hover:text-red-600">remover</button>
                                             </div>
