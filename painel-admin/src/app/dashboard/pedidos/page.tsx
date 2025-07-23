@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Tipagens
 type ExtraItem = { id: string; name: string; price: number };
@@ -59,7 +59,9 @@ export default function PedidosPage() {
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [newOrderData, setNewOrderData] = useState(initialNewOrderState);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -385,8 +387,32 @@ export default function PedidosPage() {
                   <strong>Atenção:</strong> Pedido via PIX. Verifique o recebimento do comprovativo.
                 </div>
               )}
+              {/* --- [NOVO] Secção de Detalhes Expansível --- */}
+            {expandedOrderId === order.id && (
+                <div className="mt-4 pt-4 border-t border-dashed">
+                    <h4 className="font-semibold text-gray-700 mb-2">Itens do Pedido:</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                        {order.order_items.map((item, index) => (
+                            <li key={index}>
+                                {item.quantity}x {item.item_name}
+                                {item.selected_extras && item.selected_extras.length > 0 && (
+                                    <span className="text-xs text-gray-500 ml-2">
+                                        (+ {item.selected_extras.map(e => e.name).join(', ')})
+                                    </span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                    {order.observations && (
+                        <div className="mt-3">
+                            <h4 className="font-semibold text-gray-700">Observações:</h4>
+                            <p className="text-sm text-red-600 bg-red-50 p-2 rounded-md">{order.observations}</p>
+                        </div>
+                    )}
+                </div>
+            )}
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2 items-center">
                 <button onClick={() => updateOrderStatus(order.id, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>
                 {order.order_type && order.order_type.toLowerCase() === 'delivery' ? (
                   <button onClick={() => handleUpdateStatus(order, 'Saiu para Entrega')} className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">Saiu para Entrega</button>
@@ -396,6 +422,13 @@ export default function PedidosPage() {
                 <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar Pedido</button>
                 <button onClick={() => handlePrint(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
                 <button onClick={() => handleCancelOrder(order.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Cancelar</button>
+            
+                <button 
+                    onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                    className="ml-auto p-1 text-gray-500 hover:bg-gray-100 rounded-full"
+                >
+                    {expandedOrderId === order.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </button>
             </div>
           </div>
         ))}
