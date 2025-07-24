@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useUserStore } from '@/store/userStore';
 import { InputMask } from '@react-input/mask';
 import { X } from 'lucide-react';
-import { saveCustomer } from '@/lib/api'; // Importar a nova função
+import { saveCustomer } from '@/lib/api';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -18,12 +18,25 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && phone.replace(/\D/g, '').length === 11) {
-      // Primeiro, faz o login na store local
-      login(name, phone);
+    
+    // 1. Limpa o número de telefone, removendo todos os caracteres não numéricos
+    const sanitizedPhone = phone.replace(/\D/g, '');
+
+    // 2. Valida o número limpo
+    if (name && sanitizedPhone.length === 11) {
+      // --- [NOVA LÓGICA] ---
+      // 3. Remove o nono dígito se for um telemóvel
+      const ddd = sanitizedPhone.substring(0, 2);
+      const numberPart = sanitizedPhone.substring(2);
+      let finalPhone = sanitizedPhone;
+
+      if (numberPart.startsWith('9')) {
+        finalPhone = ddd + numberPart.substring(1); // Concatena o DDD com os 8 dígitos restantes
+      }
       
-      // Depois, envia os dados para o backend para serem salvos (sem esperar pela resposta)
-      await saveCustomer(name, phone);
+      // 4. Guarda e envia o número com 10 dígitos
+      login(name, finalPhone);
+      await saveCustomer(name, finalPhone);
       
       onClose();
     } else {
