@@ -23,7 +23,6 @@ const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
 
 
-
 // Outras Configurações do App
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
 const PORT = process.env.PORT || 3001;
@@ -53,49 +52,24 @@ app.use(express.urlencoded({ extended: true }));
  * @param {string} to - O número do destinatário. Ex: '37999542651'.
  * @param {string} body - O corpo da mensagem a ser enviada.
  */
-/**
- * [VERSÃO MODIFICADA]
- * Envia uma mensagem de WhatsApp usando a API da Twilio.
- * Esta função TENTA remover o nono dígito de números de celular.
- * @param {string} to - O número do destinatário.
- * @param {string} body - O corpo da mensagem a ser enviada.
- */
 const sendWhatsappMessage = async (to, body) => {
   try {
-    // 1. Limpa o número de qualquer caractere não numérico.
-    let cleanNumber = String(to).replace(/\D/g, '');
-
-    // 2. Remove o código do país '55' se ele existir, para focar no número local.
+    const cleanNumber = String(to).replace(/\D/g, '');
+    let finalNumber;
     if (cleanNumber.startsWith('55')) {
-      cleanNumber = cleanNumber.substring(2);
+        finalNumber = cleanNumber;
+    } else {
+        finalNumber = `55${cleanNumber}`;
     }
-    // cleanNumber agora é algo como '37999542651'
-
-    // 3. LÓGICA PARA REMOVER O NONO DÍGITO
-    // Verifica se o número tem 11 dígitos (DDD + 9 + 8 dígitos) e se o terceiro dígito é '9'
-    if (cleanNumber.length === 11 && cleanNumber.charAt(2) === '9') {
-        const ddd = cleanNumber.substring(0, 2); // Pega '37'
-        const numberWithoutDDD = cleanNumber.substring(2); // Pega '999542651'
-        const numberWithoutNine = numberWithoutDDD.substring(1); // Pega '99542651'
-        
-        // Remonta o número local com 8 dígitos
-        cleanNumber = ddd + numberWithoutNine; // vira '3799542651'
-        console.log(`Nono dígito removido. Novo número local: ${cleanNumber}`);
-    }
-
-    // 4. Adiciona o código do país '55' de volta.
-    const finalNumber = `55${cleanNumber}`;
 
     const messageOptions = {
       body: body,
-      from: process.env.TWILIO_WHATSAPP_NUMBER,
+      from: twilioWhatsappNumber,
       to: `whatsapp:+${finalNumber}`
     };
-
-    console.log(`Tentando enviar via Twilio para ${messageOptions.to}`);
+    
     await twilioClient.messages.create(messageOptions);
-    console.log(`Mensagem enviada com sucesso para ${finalNumber}`);
-
+    console.log(`Mensagem enviada com sucesso para ${finalNumber} via Twilio`);
   } catch (error) {
     console.error(`Erro ao enviar mensagem via Twilio para ${to}:`, error.message);
   }
