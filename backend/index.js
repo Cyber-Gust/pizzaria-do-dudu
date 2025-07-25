@@ -601,7 +601,7 @@ app.post('/api/cashflow', async (req, res) => {
 app.get('/api/reports', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+    let query = supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
     if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
     if (endDate) {
       const endOfDay = new Date(endDate);

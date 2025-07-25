@@ -91,6 +91,7 @@ export interface OrderPayload {
   customer_phone: string;
   address: string;
   payment_method: string;
+  observations?: string;
   order_type: 'delivery' | 'pickup';
   items: OrderItemPayload[];
 }
