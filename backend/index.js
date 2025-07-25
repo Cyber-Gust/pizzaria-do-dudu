@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
+const twilio = require('twilio');
 
 // --- CONFIGURAÇÃO DO SUPABASE E EXPRESS ---
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -12,14 +13,12 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- CONFIGURAÇÃO DO TWILIO ---
-const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
-const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
-const META_WABA_CERTIFICATE = process.env.META_WABA_CERTIFICATE;
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 // --- MIDDLEWARES ---
 app.use(cors());
@@ -31,98 +30,43 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
-// --- [NOVO] ROTA DE VERIFICAÇÃO DO NÚMERO DE TELEFONE ---
-// Esta rota é usada pela Meta para confirmar que você é o dono deste backend.
-app.get('/api/meta-verification', (req, res) => {
-    const certificate = META_WABA_CERTIFICATE;
-    if (certificate) {
-        // Envia o conteúdo do certificado como texto simples
-        res.setHeader('Content-Type', 'text/plain');
-        res.send(certificate);
-    } else {
-        res.status(404).send('Certificado de verificação não encontrado.');
-    }
-});
 
 // --- FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS (CORRIGIDA) ---
 const sendWhatsappMessage = async (to, body) => {
   try {
-    // 1. Remove todos os caracteres que não são dígitos
-    let sanitizedNumber = to.replace(/\D/g, '');
+    // A Twilio precisa do número no formato E.164 (código do país + número)
+    const formattedTo = to.replace(/\D/g, ''); 
 
-    // 2. Remove o código do país (55) se ele existir, para focar no número local
-    if (sanitizedNumber.startsWith('55')) {
-        sanitizedNumber = sanitizedNumber.substring(2);
-    }
+    console.log(`Enviando mensagem via Twilio para: whatsapp:+${formattedTo}`);
 
-    // 3. Verifica se é um número de celular com 11 dígitos (DDD + 9 + número)
-    if (sanitizedNumber.length === 11) {
-      const ddd = sanitizedNumber.substring(0, 2);
-      const numberPart = sanitizedNumber.substring(2);
+    // Usa a biblioteca da Twilio para criar e enviar a mensagem
+    await twilioClient.messages.create({
+      body: body,
+      from: process.env.TWILIO_WHATSAPP_NUMBER, // Seu número Twilio
+      to: `whatsapp:+${formattedTo}`           // Número do cliente com prefixo
+    });
 
-      // Se o número após o DDD começar com '9', removemos este dígito
-      if (numberPart.startsWith('9')) {
-        const finalNumber = numberPart.substring(1); // Pega os 8 dígitos restantes
-        sanitizedNumber = `${ddd}${finalNumber}`;
-      }
-    }
-    
-    // 4. Adiciona o código do país (55) de volta para o formato final
-    const formattedTo = `55${sanitizedNumber}`;
-    
-    await axios.post(
-      `https://graph.facebook.com/v19.0/${META_PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: formattedTo, // Envia o número limpo e com código do país, sem '+'
-        text: { body: body },
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${META_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    console.log(`Mensagem enviada para ${formattedTo} via Meta API`);
+    console.log(`Mensagem enviada com sucesso para ${formattedTo} via Twilio`);
   } catch (error) {
-    console.error(`Erro ao enviar mensagem via Meta API para ${to}:`, error.response ? error.response.data.error.message : error.message);
+    console.error(`Erro ao enviar mensagem via Twilio para ${to}:`, error.message);
   }
 };
 
 
 // --- WEBHOOK DO WHATSAPP PARA A META ---
-app.use('/api/whatsapp', (req, res) => {
-    // Rota GET para verificação do Webhook
-    if (req.method === 'GET') {
-        if (
-            req.query['hub.mode'] === 'subscribe' &&
-            req.query['hub.verify_token'] === META_VERIFY_TOKEN
-        ) {
-            console.log("Webhook verificado com sucesso!");
-            res.send(req.query['hub.challenge']);
-        } else {
-            console.error("Falha na verificação do Webhook. Tokens não correspondem.");
-            res.sendStatus(400);
-        }
-    }
+app.post('/api/whatsapp', (req, res) => {
+    // A Twilio envia os dados de forma mais direta no corpo da requisição
+    const incomingMsg = req.body.Body.toLowerCase().trim(); // Mensagem do cliente
+    const from = req.body.From.replace('whatsapp:+', '');   // Número do cliente
+    
+    console.log(`Mensagem recebida de ${from}: ${incomingMsg}`);
+    
+    // Sua lógica principal de IA não muda nada!
+    handleIncomingMessage(from, incomingMsg);
 
-    // Rota POST para receber mensagens
-    if (req.method === 'POST') {
-        const entry = req.body.entry?.[0];
-        const change = entry?.changes?.[0];
-        const message = change?.value?.messages?.[0];
-
-        if (message && message.type === 'text') {
-            const from = message.from; // Número do cliente
-            const incomingMsg = message.text.body.toLowerCase().trim();
-            
-            console.log(`Mensagem recebida de ${from}: ${incomingMsg}`);
-            handleIncomingMessage(from, incomingMsg);
-        }
-        
-        res.sendStatus(200);
-    }
+    // Responda ao webhook da Twilio para confirmar o recebimento
+    res.setHeader('Content-Type', 'text/xml');
+    res.send('<Response></Response>');
 });
 
 const handleIncomingMessage = async (from, incomingMsg) => {
