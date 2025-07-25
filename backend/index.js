@@ -293,7 +293,7 @@ app.post('/api/orders', async (req, res) => {
                 total_price: itemsTotal, 
                 discount_amount: discount_amount,
                 final_price: finalPrice,
-                status: 'Em Preparo' 
+                status: 'Aguardando Confirmação' 
             })
             .select()
             .single();
@@ -318,11 +318,13 @@ app.post('/api/orders', async (req, res) => {
         
         const { data: completeOrder } = await supabase.from('orders').select('*, order_items(*)').eq('id', newOrder.id).single();
 
+        /*/
         if (completeOrder.customer_phone) {
             const itemsList = completeOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
             const confirmationMsg = `Olá, ${completeOrder.customer_name}! ✅\n\nConfirmamos o seu pedido *#${completeOrder.id}*! Ele já está na nossa cozinha.\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${completeOrder.final_price.toFixed(2)}\n*Pagamento:* ${completeOrder.payment_method}\n\nVamos te atualizando por aqui! 🍕`;
             await sendWhatsappMessage(completeOrder.customer_phone, confirmationMsg);
         }
+        */
 
         res.status(201).json(completeOrder);
     } catch (error) {
@@ -388,6 +390,37 @@ app.get('/api/orders/:id/finalize', async (req, res) => {
         res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
     } catch (error) {
         res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
+    }
+});
+
+// ROTA PARA ACEITAR PEDIDO
+app.post('/api/orders/:id/accept', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // 1. Atualiza o status do pedido para 'Em Preparo'
+        const { data: updatedOrder, error } = await supabase
+            .from('orders')
+            .update({ status: 'Em Preparo' })
+            .eq('id', id)
+            .select('*, order_items(*)') // Pega o pedido completo com os itens
+            .single();
+
+        if (error) throw error;
+        if (!updatedOrder) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+        // 2. MOVE A LÓGICA DE NOTIFICAÇÃO PARA CÁ
+        if (updatedOrder.customer_phone) {
+            const itemsList = updatedOrder.order_items.map(item => `   - ${item.quantity}x ${item.item_name}`).join('\n');
+            const confirmationMsg = `Olá, ${updatedOrder.customer_name}! ✅\n\nConfirmamos o seu pedido *#${updatedOrder.id}*! Ele já está na nossa cozinha.\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nVamos te atualizando por aqui! 🍕`;
+            await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
+        }
+
+        res.status(200).json({ message: 'Pedido aceito com sucesso!', data: updatedOrder });
+
+    } catch (error) {
+        console.error(`Erro ao aceitar o pedido #${id}:`, error);
+        res.status(500).json({ error: `Erro ao aceitar o pedido #${id}.` });
     }
 });
 

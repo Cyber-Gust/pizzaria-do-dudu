@@ -201,6 +201,29 @@ export default function PedidosPage() {
     }
   };
 
+  const handleAcceptOrder = async (order: Order) => {
+    try {
+        const response = await fetch(`${API_URL}/api/orders/${order.id}/accept`, {
+            method: 'POST',
+        });
+        if (!response.ok) {
+            throw new Error('Falha ao aceitar o pedido.');
+        }
+
+        // Após aceitar, o pedido deve ser impresso
+        handlePrint(order);
+
+        // O Realtime vai atualizar o status na tela, não precisa remover daqui.
+        // Apenas atualizamos o estado local para refletir a mudança de status.
+        setOrders(current => current.map(o => 
+            o.id === order.id ? { ...o, status: 'Em Preparo' } : o
+        ));
+
+    } catch (err: any) {
+        alert(`Erro ao aceitar pedido: ${err.message}`);
+    }
+  };
+  
   const handleUpdateStatus = (order: Order, newStatus: string) => {
     if (newStatus === 'Saiu para Entrega' && order.order_type && order.order_type.toLowerCase() === 'delivery') {
       setMotoboyModal({ isOpen: true, order: order });
@@ -375,21 +398,48 @@ export default function PedidosPage() {
             )}
 
             <div className="mt-4 flex flex-wrap gap-2 items-center">
-              <button onClick={() => updateOrderStatus(order.id, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>
-              {order.order_type === 'delivery' ? (
-                <button onClick={() => handleUpdateStatus(order, 'Saiu para Entrega')} className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">Saiu para Entrega</button>
+              {/* --- LÓGICA DE BOTÕES CONDICIONAL --- */}
+
+              {order.status === 'Aguardando Confirmação' ? (
+                  <>
+                      {/* Botão Aceitar */}
+                      <button 
+                          onClick={() => handleAcceptOrder(order)} 
+                          className="flex-grow px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-bold text-sm"
+                      >
+                          Aceitar Pedido
+                      </button>
+
+                      {/* Botão Recusar (reutiliza a função de cancelar) */}
+                      <button 
+                          onClick={() => handleCancelOrder(order.id)} 
+                          className="flex-grow px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-sm"
+                      >
+                          Recusar
+                      </button>
+                  </>
               ) : (
-                <button onClick={() => updateOrderStatus(order.id, 'Pronto para Retirada')} className="px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm">Pronto para Retirada</button>
+                  <>
+                      {/* Botões do fluxo normal para pedidos já aceitos */}
+                      <button onClick={() => updateOrderStatus(order.id, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>
+                      {order.order_type === 'delivery' ? (
+                          <button onClick={() => handleUpdateStatus(order, 'Saiu para Entrega')} className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">Saiu para Entrega</button>
+                      ) : (
+                          <button onClick={() => updateOrderStatus(order.id, 'Pronto para Retirada')} className="px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm">Pronto para Retirada</button>
+                      )}
+                      <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar</button>
+                  </>
               )}
-              <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar</button>
+
+              {/* Botões que aparecem sempre */}
               <button onClick={() => handlePrint(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
               <button onClick={() => handleCancelOrder(order.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Cancelar</button>
 
               <button
-                onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
-                className="ml-auto p-1 text-gray-500 hover:bg-gray-100 rounded-full"
+                  onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                  className="ml-auto p-1 text-gray-500 hover:bg-gray-100 rounded-full"
               >
-                {expandedOrderId === order.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  {expandedOrderId === order.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
               </button>
             </div>
           </div>
