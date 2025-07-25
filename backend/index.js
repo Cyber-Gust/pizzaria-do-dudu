@@ -1,82 +1,101 @@
 // backend/index.js
-require('dotenv').config();
+
+require('dotenv').config(); // Sempre a primeira linha de todas!
+
+// --- IMPORTAÇÕES ---
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { createClient } = require('@supabase/supabase-js');
-const axios = require('axios');
 const twilio = require('twilio');
 
-// --- CONFIGURAÇÃO DO SUPABASE E EXPRESS ---
+// --- [BOA PRÁTICA] DEFININDO CONSTANTES A PARTIR DO PROCESS.ENV ---
+// Pegamos os valores do 'quadro de avisos' (process.env) e guardamos em constantes.
+
+// Credenciais do Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- CONFIGURAÇÃO DO TWILIO ---
+// Credenciais da Twilio
+const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+
+// Outras Configurações do App
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
-
-
-const app = express();
 const PORT = process.env.PORT || 3001;
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+// --- INICIALIZAÇÃO DOS CLIENTES E DO APP ---
+
+// Verificação para garantir que as credenciais críticas foram carregadas
+if (!supabaseUrl || !supabaseKey || !twilioAccountSid || !twilioAuthToken || !twilioWhatsappNumber) {
+    console.error("ERRO FATAL: Uma ou mais variáveis de ambiente (Supabase ou Twilio) não foram carregadas. Verifique seu arquivo .env");
+    process.exit(1); // Encerra o programa se as variáveis críticas não existirem
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+const twilioClient = twilio(twilioAccountSid, twilioAuthToken);
+const app = express();
 
 // --- MIDDLEWARES ---
 app.use(cors());
 app.use(helmet());
-app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  },
-}));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
-// --- FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS (CORRIGIDA) ---
+// --- [ATUALIZADO] FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS COM TWILIO ---
+/**
+ * Envia uma mensagem de WhatsApp usando a API da Twilio.
+ * @param {string} to - O número do destinatário. Ex: '37999542651'.
+ * @param {string} body - O corpo da mensagem a ser enviada.
+ */
 const sendWhatsappMessage = async (to, body) => {
   try {
-    // A Twilio precisa do número no formato E.164 (código do país + número)
-    const formattedTo = to.replace(/\D/g, ''); 
+    const cleanNumber = String(to).replace(/\D/g, '');
+    let finalNumber;
+    if (cleanNumber.startsWith('55')) {
+        finalNumber = cleanNumber;
+    } else {
+        finalNumber = `55${cleanNumber}`;
+    }
 
-    console.log(`Enviando mensagem via Twilio para: whatsapp:+${formattedTo}`);
-
-    // Usa a biblioteca da Twilio para criar e enviar a mensagem
-    await twilioClient.messages.create({
+    const messageOptions = {
       body: body,
-      from: process.env.TWILIO_WHATSAPP_NUMBER, // Seu número Twilio
-      to: `whatsapp:+${formattedTo}`           // Número do cliente com prefixo
-    });
-
-    console.log(`Mensagem enviada com sucesso para ${formattedTo} via Twilio`);
+      from: twilioWhatsappNumber,
+      to: `whatsapp:+${finalNumber}`
+    };
+    
+    await twilioClient.messages.create(messageOptions);
+    console.log(`Mensagem enviada com sucesso para ${finalNumber} via Twilio`);
   } catch (error) {
     console.error(`Erro ao enviar mensagem via Twilio para ${to}:`, error.message);
   }
 };
 
 
-// --- WEBHOOK DO WHATSAPP PARA A META ---
+// --- [ATUALIZADO] WEBHOOK DO WHATSAPP PARA RECEBER MENSAGENS DA TWILIO ---
 app.post('/api/whatsapp', (req, res) => {
-    // A Twilio envia os dados de forma mais direta no corpo da requisição
-    const incomingMsg = req.body.Body.toLowerCase().trim(); // Mensagem do cliente
-    const from = req.body.From.replace('whatsapp:+', '');   // Número do cliente
+    const incomingMsg = req.body.Body.toLowerCase().trim();
+    const from = req.body.From.replace('whatsapp:+', '');
     
     console.log(`Mensagem recebida de ${from}: ${incomingMsg}`);
     
-    // Sua lógica principal de IA não muda nada!
     handleIncomingMessage(from, incomingMsg);
 
-    // Responda ao webhook da Twilio para confirmar o recebimento
     res.setHeader('Content-Type', 'text/xml');
     res.send('<Response></Response>');
 });
 
+
+// --- LÓGICA DE NEGÓCIO (IA) ---
+// Esta função não precisa de nenhuma alteração.
 const handleIncomingMessage = async (from, incomingMsg) => {
     try {
-        // 1. Busca de dados essenciais
         const { data: status, error: statusError } = await supabase.from('pizzeria_status').select('is_open').single();
         const { data: hours, error: hoursError } = await supabase.from('operating_hours').select('*').order('day_of_week');
         if (statusError || hoursError) throw new Error('Falha ao buscar informações da pizzaria.');
 
-        // 2. Reconhecimento de Intenção
         const recognizeIntent = (msg) => {
             const intents = {
                 ORDER: ['pedido', 'cardápio', 'pizza', 'pedir', 'cardapio', 'quero', 'gostaria'],
@@ -94,17 +113,15 @@ const handleIncomingMessage = async (from, incomingMsg) => {
         const intent = recognizeIntent(incomingMsg);
         let responseMsg = '';
 
-        // 3. Lógica de Resposta Baseada na Intenção
         switch (intent) {
             case 'ORDER':
                 if (status.is_open) {
                     responseMsg = `Olá! 👋 Que bom que você quer pedir uma pizza!\n\nPara ver nosso cardápio completo e fazer seu pedido de forma rápida e segura, acesse nosso site:\n\n*${clientPlatformUrl}*\n\nÉ só escolher, adicionar no carrinho e finalizar. Estamos te esperando! 😉🍕`;
                 } else {
                     const nextOpening = getNextOpeningTime(hours);
-                    responseMsg = `Olá! No momento estamos fechados. �\n\n${nextOpening}\n\nAssim que abrirmos, será um prazer atender você!`;
+                    responseMsg = `Olá! No momento estamos fechados. 😢\n\n${nextOpening}\n\nAssim que abrirmos, será um prazer atender você!`;
                 }
                 break;
-
             case 'HOURS':
                 const today = new Date().getDay();
                 responseMsg = `Nosso horário de funcionamento é:\n`;
@@ -113,39 +130,32 @@ const handleIncomingMessage = async (from, incomingMsg) => {
                     responseMsg += `\n${isToday ? '*HOJE* - ' : ''}*${day.day_name}:* ${day.is_open ? `${day.open_time} - ${day.close_time}` : 'Fechado'}`;
                 });
                 break;
-
             case 'ADDRESS':
-                responseMsg = `Claro! Nosso endereço é:\n\n*R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nVocê pode ver no mapa e traçar a rota clicando aqui: https://maps.app.goo.gl/hBVn4nBZVSS5pWoa9`;
+                responseMsg = `Claro! Nosso endereço é:\n\n*R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nVocê pode ver no mapa e traçar a rota clicando aqui: https://maps.app.goo.gl/exemplo`;
                 break;
-            
             case 'GREETING':
-                 responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n`;
-                 break;
-
+                responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n`;
+                break;
             case 'THANKS':
                 responseMsg = `De nada! 😊 Se precisar de mais alguma coisa, é só chamar!`;
                 break;
-
             default: // UNKNOWN
                 responseMsg = `Desculpe, não entendi. 🤔`;
                 break;
         }
-
         await sendWhatsappMessage(from, responseMsg);
-
     } catch (error) {
         console.error("Erro no processamento da IA:", error);
         await sendWhatsappMessage(from, "Ops! Tivemos um probleminha aqui. Tente novamente em alguns instantes.");
     }
 };
 
-// Função auxiliar para descobrir o próximo horário de abertura
+// Esta função não precisa de nenhuma alteração.
 const getNextOpeningTime = (hours) => {
     const now = new Date();
-    const currentDay = now.getDay(); // Domingo = 0, Sábado = 6
-    const currentTime = now.getHours() * 60 + now.getMinutes(); // Tempo em minutos
+    const currentDay = now.getDay();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
 
-    // Procura a partir de hoje
     for (let i = 0; i < 7; i++) {
         const dayToCheckIndex = (currentDay + i) % 7;
         const dayData = hours.find(h => h.day_of_week === dayToCheckIndex);
@@ -154,11 +164,9 @@ const getNextOpeningTime = (hours) => {
             const [openHour, openMinute] = dayData.open_time.split(':').map(Number);
             const openTimeInMinutes = openHour * 60 + openMinute;
             
-            // Se for hoje e ainda não abriu
             if (i === 0 && currentTime < openTimeInMinutes) {
                 return `Abrimos *hoje* às ${dayData.open_time}.`;
             }
-            // Se for para um próximo dia
             if (i > 0) {
                 const dayName = i === 1 ? 'amanhã' : `na próxima ${dayData.day_name}`;
                 return `Abrimos ${dayName} às ${dayData.open_time}.`;
