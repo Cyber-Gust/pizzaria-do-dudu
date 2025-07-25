@@ -19,7 +19,6 @@ const supabaseKey = process.env.SUPABASE_KEY;
 // Credenciais da Twilio
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-
 const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
 
