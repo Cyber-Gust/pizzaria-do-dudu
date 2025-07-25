@@ -103,22 +103,186 @@ export default function PedidosPage() {
 
   // --- [ATUALIZADO] LÓGICA DE IMPRESSÃO COM ENDEREÇO ---
   const formatOrderForPrinting = (order: Order): string => {
-    let itemsHtml = '';
-    (order.order_items || []).forEach(item => {
-      const itemTotal = (item.quantity * item.price_per_item).toFixed(2);
-      itemsHtml += `<tr><td style="text-align: left; vertical-align: top;">${item.quantity}x</td><td style="padding-left: 5px;">${item.item_name}`;
-      if (item.selected_extras && item.selected_extras.length > 0) {
-        itemsHtml += `<div style="font-size: 10px; color: #333;">`;
-        item.selected_extras.forEach(extra => { itemsHtml += `<div>+ ${extra.name}</div>`; });
-        itemsHtml += `</div>`;
-      }
-      itemsHtml += `</td><td style="text-align: right; vertical-align: top;">R$${itemTotal}</td></tr>`;
-    });
+      // --- Parte 1: Monta a lista de itens ---
+      // Esta parte continua igual, pois já era eficiente.
+      const itemsHtml = (order.order_items || []).map(item => {
+          const itemTotal = (item.quantity * item.price_per_item).toFixed(2);
+          let extrasHtml = '';
+          if (item.selected_extras && item.selected_extras.length > 0) {
+              extrasHtml = `<div class="extras-list">${item.selected_extras.map(extra => `<div>+ ${extra.name}</div>`).join('')}</div>`;
+          }
+          return `
+              <tr>
+                  <td class="item-qty">${item.quantity}x</td>
+                  <td class="item-name">
+                      ${item.item_name}
+                      ${extrasHtml}
+                  </td>
+                  <td class="item-price">R$${itemTotal}</td>
+              </tr>`;
+      }).join('');
 
-    let addressHtml = (order.order_type === 'delivery' && order.address) ? `<div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;"><div style="font-weight: bold;">Endereço de Entrega:</div><div style="font-size: 12px; font-weight: bold;">${order.address}</div></div>` : '';
-    let observationsHtml = (order.observations && order.observations.trim() !== '') ? `<div style="border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px;"><div style="font-weight: bold;">Observações:</div><div style="font-size: 12px; font-weight: bold;">${order.observations}</div></div>` : '';
+      // --- Parte 2: A Mágica do Novo Layout (HTML e CSS) ---
+      return `
+          <html>
+          <head>
+              <title>Pedido #${order.id}</title>
+              <style>
+                  /* --- Configurações Gerais e de Impressão --- */
+                  @page { 
+                      size: 58mm auto; 
+                      margin: 3mm; 
+                  }
+                  body { 
+                      font-family: 'Consolas', 'Menlo', 'Courier New', monospace; 
+                      font-size: 11px; 
+                      color: #000;
+                      width: 52mm; /* Largura útil dentro da margem */
+                  }
 
-    return `<html><head><title>Pedido #${order.id}</title><style>@page{size: 58mm auto; margin: 1mm;} body{font-family: 'Courier New', monospace; font-size: 11px; color: #000; width: 56mm; font-weight: bold; padding-top: 10px; padding-bottom: 10px;} .header h1{font-size: 16px; margin: 0; text-align: center;} .info-table, .items-table{width: 100%; border-collapse: collapse;} .info-table td{padding: 1px 0;} .items-table{margin-top: 10px;} .items-table th{border-bottom: 1px dashed #000; text-align: left; padding-bottom: 3px;} .items-table td{padding: 3px 0;} .total{font-size: 14px; margin-top: 10px; border-top: 1px dashed #000; padding-top: 5px; display: flex; justify-content: space-between;}</style></head><body><div class="header"><h1>FORNERIA 360</h1></div><table class="info-table"><tr><td>Pedido:</td><td style="text-align: right;">#${order.id}</td></tr><tr><td>Data:</td><td style="text-align: right;">${new Date(order.created_at).toLocaleString('pt-BR')}</td></tr><tr><td>Cliente:</td><td style="text-align: right;">${order.customer_name || 'N/A'}</td></tr><tr><td>Telefone:</td><td style="text-align: right;">${order.customer_phone || 'N/A'}</td></tr><tr><td>Tipo:</td><td style="text-align: right;">${order.order_type.toUpperCase()}</td></tr><tr><td>Pagamento:</td><td style="text-align: right;">${order.payment_method.toUpperCase()}</td></tr></table>${addressHtml}<table class="items-table"><thead><tr><th style="width: 10%;">Qtd</th><th style="width: 60%;">Item</th><th style="width: 30%; text-align: right;">Valor</th></tr></thead><tbody>${itemsHtml}</tbody></table>${observationsHtml}<div class="total"><span>Total:</span><span>R$ ${order.final_price.toFixed(2)}</span></div></body></html>`;
+                  /* --- Estrutura e Estilos --- */
+                  .receipt-header {
+                      text-align: center;
+                      margin-bottom: 8px;
+                  }
+                  .receipt-header h1 {
+                      font-size: 18px;
+                      font-weight: bold;
+                      margin: 0;
+                  }
+                  .order-id {
+                      text-align: center;
+                      font-size: 20px;
+                      font-weight: bold;
+                      border-top: 1px dashed #000;
+                      border-bottom: 1px dashed #000;
+                      padding: 4px 0;
+                      margin-bottom: 8px;
+                  }
+                  .section {
+                      margin-top: 10px;
+                  }
+                  .section-title {
+                      font-weight: bold;
+                      border-bottom: 1px solid #000;
+                      padding-bottom: 2px;
+                      margin-bottom: 5px;
+                  }
+                  .info-table, .items-table {
+                      width: 100%;
+                      border-collapse: collapse;
+                  }
+                  .info-table td {
+                      padding: 1.5px 0;
+                  }
+                  .info-table td:last-child {
+                      text-align: right;
+                  }
+
+                  .items-table .item-qty {
+                      text-align: left; 
+                      vertical-align: top;
+                      width: 15%;
+                  }
+                  .items-table .item-name {
+                      padding: 0 4px;
+                  }
+                  .items-table .item-price {
+                      text-align: right; 
+                      vertical-align: top;
+                      width: 30%;
+                  }
+                  .items-table .extras-list {
+                      font-size: 10px;
+                      color: #333;
+                      padding-left: 4px;
+                  }
+
+                  /* --- Seção de Destaque para Observações --- */
+                  .observations-box {
+                      margin-top: 10px;
+                      padding: 6px;
+                      border: 1px solid #000;
+                      background-color: #f0f0f0;
+                  }
+                  .observations-box .section-title {
+                      border: none;
+                      margin-bottom: 4px;
+                  }
+                  .observations-box p {
+                      font-size: 12px;
+                      font-weight: bold;
+                      margin: 0;
+                      white-space: pre-wrap; /* Mantém as quebras de linha */
+                  }
+
+                  .total-line {
+                      margin-top: 10px;
+                      padding-top: 5px;
+                      border-top: 1px dashed #000;
+                      display: flex;
+                      justify-content: space-between;
+                      font-size: 16px;
+                      font-weight: bold;
+                  }
+                  .footer {
+                      margin-top: 15px;
+                      text-align: center;
+                      font-size: 10px;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="receipt-header">
+                  <h1>FORNERIA 360</h1>
+              </div>
+
+              <div class="order-id">
+                  PEDIDO #${order.id}
+              </div>
+
+              <div class="section">
+                  <table class="info-table">
+                      <tr><td>Data:</td><td>${new Date(order.created_at).toLocaleString('pt-BR')}</td></tr>
+                      <tr><td>Cliente:</td><td>${order.customer_name || 'N/A'}</td></tr>
+                      <tr><td>Telefone:</td><td>${order.customer_phone || 'N/A'}</td></tr>
+                      <tr><td>Tipo:</td><td><strong>${order.order_type.toUpperCase()}</strong></td></tr>
+                      <tr><td>Pagamento:</td><td><strong>${order.payment_method.toUpperCase()}</strong></td></tr>
+                  </table>
+              </div>
+
+              <div class="section">
+                  <div class="section-title">Itens do Pedido</div>
+                  <table class="items-table">
+                      <tbody>${itemsHtml}</tbody>
+                  </table>
+              </div>
+              
+              ${(order.order_type === 'delivery' && order.address) ? `
+                  <div class="section">
+                      <div class="section-title">Endereço de Entrega</div>
+                      <p style="font-size: 12px; font-weight: bold;">${order.address}</p>
+                  </div>
+              ` : ''}
+
+              ${(order.observations && order.observations.trim() !== '') ? `
+                  <div class="observations-box">
+                      <div class="section-title">!!! OBSERVAÇÕES !!!</div>
+                      <p>${order.observations}</p>
+                  </div>
+              ` : ''}
+
+              <div class="total-line">
+                  <span>Total:</span>
+                  <span>R$ ${order.final_price.toFixed(2).replace('.', ',')}</span>
+              </div>
+
+              <div class="footer">
+                  Obrigado pela preferência!
+              </div>
+          </body>
+          </html>
+      `;
   };
 
   const handlePrint = useCallback((order: Order) => {
