@@ -17,9 +17,13 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
 // Credenciais da Twilio
-const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+/*/const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+*/
 const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+
+const twilioAccountSid = "AC1b87af61cec21bdd99b7fd8798646a49"; // <-- COLE SEU ACCOUNT SID AQUI
+const twilioAuthToken = "a244edd1633e1f84d2e5d8426a9bb3b9";
 
 // Outras Configurações do App
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
