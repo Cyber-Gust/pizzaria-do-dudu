@@ -378,15 +378,47 @@ app.post('/api/orders/:id', async (req, res) => {
     }
 });
 
-// ROTA PARA O MOTOBOY FINALIZAR A ENTREGA (VIA LINK)
+// --- ROTA DO MOTOBOY (CORRIGIDA) ---
 app.get('/api/orders/:id/finalize', async (req, res) => {
     const { id } = req.params;
     try {
-        // Esta rota apenas atualiza o status. A notificação de feedback é
-        // disparada pela rota principal quando o status muda para 'Finalizado'.
-        await supabase.from('orders').update({ status: 'Finalizado' }).eq('id', id);
+        // 1. Atualiza o status e busca o pedido completo em uma única chamada.
+        const { data: finalizedOrder, error } = await supabase
+            .from('orders')
+            .update({ status: 'Finalizado' })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // 2. Executa a mesma lógica financeira da rota principal.
+        const pizzeriaIncome = finalizedOrder.final_price - (finalizedOrder.delivery_fee || 0);
+        await supabase.from('cash_flow').insert([{ 
+            description: `Venda do Pedido #${finalizedOrder.id}`, 
+            type: 'income', 
+            amount: pizzeriaIncome, 
+            order_id: finalizedOrder.id 
+        }]);
+
+        // 3. Executa a mesma lógica de feedback da rota principal.
+        if (finalizedOrder.customer_phone) {
+            setTimeout(async () => {
+                try {
+                    await sendWhatsappTemplateMessage(
+                        finalizedOrder.customer_phone,
+                        'HX4f53242e7c369f2ad722095c41cd0f46', // SID para 'pedido_feedback'
+                        { '1': finalizedOrder.customer_name }
+                    );
+                } catch (e) {
+                    console.error(`Erro ao agendar mensagem de feedback para o pedido #${id}:`, e);
+                }
+            }, 7200000); // 2 horas
+        }
+
         res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
     } catch (error) {
+        console.error(`Erro ao finalizar pedido #${id} pelo link:`, error);
         res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
     }
 });
