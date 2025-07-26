@@ -29,32 +29,38 @@ interface CartState {
 
 export const useCartStore = create(
   persist<CartState>(
-    (set) => ({
+    (set, get) => ({
       items: [],
-      // A função agora é mais flexível para aceitar o objeto customizado
       addItem: (product, extras = []) =>
         set((state) => {
-          // Para pizzas meio a meio, sempre adicionamos como um novo item
+          // 1. LÓGICA PARA PIZZAS MEIO A MEIO (MANTIDA)
+          // Pizzas meio a meio são sempre adicionadas como um novo item, sem extras.
           if ('type' in product && product.type === 'half-and-half') {
             return {
               items: [
                 ...state.items,
                 {
-                  cartItemId: crypto.randomUUID(),
+                  cartItemId: crypto.randomUUID(), // ID aleatório é suficiente aqui.
                   product,
                   quantity: 1,
-                  extras: [], // Adicionais não se aplicam a meio a meio neste exemplo
+                  extras: [], // Extras são ignorados para meio a meio.
                 },
               ],
             };
           }
           
-          // Lógica existente para produtos normais
+          // 2. LÓGICA CORRIGIDA PARA PRODUTOS NORMAIS
+          
+          // Criamos um ID único e consistente baseado no produto E nos extras selecionados.
+          const sortedExtraIds = extras.map(e => e.id).sort().join(',');
+          const cartItemId = `${product.id}-${sortedExtraIds}`;
+
           const existingItem = state.items.find(
-            (item) => item.product.id === product.id && item.extras.length === extras.length // Simplificação
+            (item) => item.cartItemId === cartItemId
           );
 
           if (existingItem) {
+            // Se um item idêntico (mesma pizza, mesmos extras) já existe, apenas aumentamos a quantidade.
             return {
               items: state.items.map((item) =>
                 item.cartItemId === existingItem.cartItemId
@@ -64,15 +70,15 @@ export const useCartStore = create(
             };
           }
           
-          // Adiciona item normal
+          // Se for um item novo, adicionamos com os extras corretos.
           return {
             items: [
               ...state.items,
               {
-                cartItemId: crypto.randomUUID(),
+                cartItemId: cartItemId, // Usamos nosso ID consistente.
                 product,
                 quantity: 1,
-                extras,
+                extras, // Os extras são salvos aqui!
               },
             ],
           };
@@ -102,7 +108,7 @@ export const useCartStore = create(
       clearCart: () => set({ items: [] }),
     }),
     {
-      name: 'pizzaria-dudo-cart',
+      name: 'pizzaria-dudo-cart', // Nome do seu localStorage
     }
   )
 );

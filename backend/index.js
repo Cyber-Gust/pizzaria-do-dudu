@@ -10,26 +10,15 @@ const { createClient } = require('@supabase/supabase-js');
 const twilio = require('twilio');
 
 // --- [BOA PRÁTICA] DEFININDO CONSTANTES A PARTIR DO PROCESS.ENV ---
-// Pegamos os valores do 'quadro de avisos' (process.env) e guardamos em constantes.
-
-// Credenciais do Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
-
-// Credenciais da Twilio
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-
-
-
-// Outras Configurações do App
 const clientPlatformUrl = process.env.CLIENT_PLATFORM_URL || 'forneria360.com.br';
 const PORT = process.env.PORT || 3001;
 
 // --- INICIALIZAÇÃO DOS CLIENTES E DO APP ---
-
-// Verificação para garantir que as credenciais críticas foram carregadas
 if (!supabaseUrl || !supabaseKey || !twilioAccountSid || !twilioAuthToken || !twilioWhatsappNumber) {
     console.error("ERRO FATAL: Uma ou mais variáveis de ambiente (Supabase ou Twilio) não foram carregadas. Verifique seu arquivo .env");
     process.exit(1); // Encerra o programa se as variáveis críticas não existirem
@@ -87,12 +76,7 @@ app.post('/api/whatsapp', (req, res) => {
 });
 
 
-// --- LÓGICA DE NEGÓCIO (ATENDENTE AUTOMÁTICO APRIMORADO) ---
-
-/**
- * Retorna a saudação correta (Bom dia, Boa tarde, Boa noite) baseada no horário atual.
- * @returns {string} A saudação.
- */
+// --- LÓGICA DE NEGÓCIO (ATENDENTE AUTOMÁTICO) ---
 const getGreetingByTime = () => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) return "Bom dia";
@@ -123,25 +107,14 @@ const getNextOpeningTime = (hours) => {
     return 'No momento não temos um próximo horário de funcionamento definido.';
 };
 
-
 const handleIncomingMessage = async (from, incomingMsg) => {
     try {
-        // Buscamos as informações em tempo real da pizzaria.
         const { data: status, error: statusError } = await supabase.from('pizzeria_status').select('is_open').single();
         const { data: hours, error: hoursError } = await supabase.from('operating_hours').select('*').order('day_of_week');
-        
-        if (statusError || hoursError) {
-            throw new Error('Falha ao buscar informações da pizzaria.');
-        }
+        if (statusError || hoursError) throw new Error('Falha ao buscar informações da pizzaria.');
 
-        /**
-         * Reconhece a intenção do usuário a partir da mensagem, usando palavras-chave.
-         * @param {string} msg - A mensagem do cliente.
-         * @returns {string} A intenção identificada ('ORDER', 'HOURS', etc.).
-         */
         const recognizeIntent = (msg) => {
-            const lowerCaseMsg = msg.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove acentos
-            
+            const lowerCaseMsg = msg.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const intents = {
                 TALK_TO_HUMAN: ['falar com', 'atendente', 'ligar', 'telefone', 'contato', 'problema', 'humano', 'falar com alguem', 'ajuda'],
                 ORDER: ['pedido', 'pedir', 'cardapio', 'pizza', 'quero', 'gostaria', 'fazer um pedido', 'ver as pizzas', 'menu', 'sabor', 'sabores'],
@@ -150,11 +123,8 @@ const handleIncomingMessage = async (from, incomingMsg) => {
                 GREETING: ['oi', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'opa', 'eai', 'tudo bem'],
                 THANKS: ['obrigado', 'obg', 'valeu', 'vlw', 'agradecido', 'grato', 'blz', 'beleza'],
             };
-            
             for (const intent in intents) {
-                if (intents[intent].some(keyword => lowerCaseMsg.includes(keyword))) {
-                    return intent;
-                }
+                if (intents[intent].some(keyword => lowerCaseMsg.includes(keyword))) return intent;
             }
             return 'UNKNOWN';
         };
@@ -165,20 +135,17 @@ const handleIncomingMessage = async (from, incomingMsg) => {
 
         switch (intent) {
             case 'TALK_TO_HUMAN':
-                // IMPORTANTE: Substitua pelo telefone da sua pizzaria!
-                const phoneNumber = "(32) 99941-3289"; 
-                responseMsg = `Com certeza! Se for algo que precise resolver diretamente com a gente, nosso telefone é o *${phoneNumber}* 📞\n\nNosso atendimento por telefone funciona durante nosso horário de funcionamento, ok? Se for algo sobre o cardápio ou como pedir, posso te ajudar por aqui mesmo!`;
+                const phoneNumber = "(32) 99941-3289"; // Substitua pelo seu telefone
+                responseMsg = `Com certeza! Se for algo que precise resolver diretamente com a gente, nosso telefone é o *${phoneNumber}* 📞\n\nNosso atendimento por telefone funciona durante nosso horário de funcionamento, ok?`;
                 break;
-                
             case 'ORDER':
                 if (status.is_open) {
-                    responseMsg = `Opa, que bom que bateu a fome! �\n\nPara ver nosso cardápio completo e fazer seu pedido rapidinho, é só acessar nosso site:\n\n➡️ *${clientPlatformUrl}*\n\nLá você escolhe tudo com calma e o pedido já cai direto na nossa cozinha. Estamos te esperando! 😉`;
+                    responseMsg = `Opa, que bom que bateu a fome! 🍕\n\nPara ver nosso cardápio completo e fazer seu pedido rapidinho, é só acessar nosso site:\n\n➡️ *${clientPlatformUrl}*\n\nLá você escolhe tudo com calma e o pedido já cai direto na nossa cozinha. Estamos te esperando! 😉`;
                 } else {
                     const nextOpening = getNextOpeningTime(hours);
                     responseMsg = `${greeting}! No momento nossa cozinha está descansando. 😴\n\n${nextOpening}\n\nSalve nosso site e, assim que abrirmos, será um prazer te atender!`;
                 }
                 break;
-
             case 'HOURS':
                 const today = new Date().getDay();
                 let hoursText = hours.map(day => {
@@ -187,28 +154,20 @@ const handleIncomingMessage = async (from, incomingMsg) => {
                 }).join('\n');
                 responseMsg = `Claro! Nosso horário de funcionamento é este aqui:\n\n${hoursText}\n\nQualquer dúvida, é só chamar! 👍`;
                 break;
-
             case 'ADDRESS':
-                responseMsg = `Estamos te esperando! Nosso endereço para retirada é:\n\n📍 *R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nPara facilitar, aqui está o link direto para o mapa:\nhttps://maps.app.goo.gl/HTKU9ooFeibhL7yz5`;
+                responseMsg = `Estamos te esperando! Nosso endereço para retirada é:\n\n📍 *R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nPara facilitar, aqui está o link direto para o mapa:\nhttp://googleusercontent.com/maps/google.com/2`;
                 break;
-
             case 'GREETING':
-                // RESPOSTA MAIS HUMANA:
                 responseMsg = `${greeting}! Aqui é da Forneria 360, tudo bem? 😊\n\nComo posso te ajudar?`;
                 break;
-
             case 'THANKS':
                 responseMsg = `Imagina, por nada! Precisando, é só chamar. 😉`;
                 break;
-
-            default: // UNKNOWN
-                // RESPOSTA PADRÃO MAIS HUMANA:
-                responseMsg = `Desculpe, não entendi sua mensagem. 🤔\n\nSe precisar de ajuda com o cardápio, nosso horário ou endereço, pode me perguntar que eu te ajudo!`;
+            default:
+                responseMsg = `Desculpe, não entendi sua mensagem. 🤔\n\nSe precisar de ajuda com o cardápio, nosso horário ou endereço, pode me perguntar que eu te ajudo! Se preferir, pode pedir para **falar com um atendente**.`;
                 break;
         }
-        
         await sendWhatsappMessage(from, responseMsg);
-
     } catch (error) {
         console.error("Erro no processamento da mensagem:", error);
         await sendWhatsappMessage(from, "Ops! Tivemos um probleminha no nosso sistema. 🤖 Por favor, tente novamente em alguns instantes.");
@@ -217,29 +176,23 @@ const handleIncomingMessage = async (from, incomingMsg) => {
 
 // --- ROTAS DE STATUS ---
 app.get('/api/status', async (req, res) => {
-  try {
-    // A busca continua a mesma, mas agora irá retornar os novos campos
-    const { data, error } = await supabase.from('pizzeria_status').select('*').eq('id', 1).single();
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar status da pizzaria.' }); }
+    try {
+        const { data, error } = await supabase.from('pizzeria_status').select('*').eq('id', 1).single();
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar status da pizzaria.' }); }
 });
 
 app.post('/api/status', async (req, res) => {
-  // O objeto de atualização agora pode receber os quatro novos campos de tempo
-  const updateObject = { ...req.body, updated_at: new Date().toISOString() };
-  
-  // Remove a verificação antiga para permitir que apenas um campo seja atualizado se necessário
-  // if (Object.keys(updateObject).length <= 1) return res.status(400).json({ error: 'Nenhum dado válido para atualização foi enviado.' });
-
-  try {
-    const { data, error } = await supabase.from('pizzeria_status').update(updateObject).eq('id', 1).select().single();
-    if (error) throw error;
-    res.status(200).json({ message: 'Status atualizado com sucesso!', data });
-  } catch (error) { 
-    console.error("Erro ao atualizar status:", error);
-    res.status(500).json({ error: 'Erro ao atualizar o status da pizzaria.' }); 
-  }
+    const updateObject = { ...req.body, updated_at: new Date().toISOString() };
+    try {
+        const { data, error } = await supabase.from('pizzeria_status').update(updateObject).eq('id', 1).select().single();
+        if (error) throw error;
+        res.status(200).json({ message: 'Status atualizado com sucesso!', data });
+    } catch (error) { 
+        console.error("Erro ao atualizar status:", error);
+        res.status(500).json({ error: 'Erro ao atualizar o status da pizzaria.' }); 
+    }
 });
 
 // --- ROTAS DE PEDIDOS ---
@@ -259,37 +212,35 @@ app.get('/api/orders', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }
 });
 
-// [CORRIGIDO] Rota para criar um novo pedido (manual ou via cliente)
 app.post('/api/orders', async (req, res) => {
-    // Extrai 'observations' explicitamente do corpo da requisição
     const { items, discount_amount = 0, delivery_fee = 0, observations, ...orderDetails } = req.body;
-    
     if (!items || !orderDetails.order_type) {
         return res.status(400).json({ error: 'Dados do pedido incompletos.' });
     }
     try {
+        console.log("1. Calculando totais do pedido...");
         const itemsTotal = items.reduce((acc, item) => {
             const extrasTotal = (item.extras || []).reduce((extraAcc, extra) => extraAcc + extra.price, 0);
             return acc + (item.quantity * item.price_per_item) + extrasTotal;
         }, 0);
-        
         const finalPrice = (itemsTotal + delivery_fee) - discount_amount;
 
-        const { data: newOrder, error: orderError } = await supabase
-            .from('orders')
-            .insert({ 
-                ...orderDetails, 
-                observations: observations, // Garante que as observações são salvas
-                total_price: itemsTotal, 
-                discount_amount: discount_amount,
-                final_price: finalPrice,
-                status: 'Aguardando Confirmação' 
-            })
-            .select()
-            .single();
+        console.log("2. Inserindo pedido principal na tabela 'orders'...");
+        const { data: newOrder, error: orderError } = await supabase.from('orders').insert({ 
+            ...orderDetails, 
+            observations: observations,
+            total_price: itemsTotal, 
+            discount_amount: discount_amount,
+            delivery_fee: delivery_fee,
+            final_price: finalPrice,
+            status: 'Aguardando Confirmação'
+        }).select().single();
+
         if (orderError) throw orderError;
-        
+        console.log(`3. Pedido #${newOrder.id} criado com sucesso.`);
+
         if (items.length > 0) {
+            console.log(`4. Inserindo ${items.length} itens na tabela 'order_items'...`);
             const orderItemsToInsert = items.map(item => ({
                 order_id: newOrder.id,
                 item_type: item.item_type,
@@ -301,28 +252,27 @@ app.post('/api/orders', async (req, res) => {
             }));
             const { error: itemsError } = await supabase.from('order_items').insert(orderItemsToInsert);
             if (itemsError) {
+                console.error(`ERRO ao inserir itens para o pedido #${newOrder.id}. Fazendo rollback...`);
                 await supabase.from('orders').delete().eq('id', newOrder.id);
                 throw itemsError;
             }
+            console.log("5. Itens inseridos com sucesso.");
         }
         
+        console.log("6. Buscando pedido completo para retornar ao frontend...");
         const { data: completeOrder } = await supabase.from('orders').select('*, order_items(*)').eq('id', newOrder.id).single();
-
         
-        if (newStatus === 'Em Preparo' && updatedOrder.customer_phone) {
-            const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
-            const confirmationMsg = `Olá, ${updatedOrder.customer_name}! Seu pedido *#${updatedOrder.id}* foi confirmado! ✅\n\nNossa cozinha já está a todo vapor preparando sua pizza. Logo logo te avisamos das próximas etapas!\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nQualquer dúvida, estamos por aqui! 👨‍🍳`;
-            await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
-        }
-        
-
+        // A ROTA TERMINA AQUI. Nenhuma lógica de notificação.
+        console.log("7. Enviando resposta de sucesso (201) para o frontend.");
         res.status(201).json(completeOrder);
+
     } catch (error) {
-        console.error('Erro ao criar novo pedido:', error);
+        console.error('ERRO CRÍTICO na rota de criação de pedido:', error);
         res.status(500).json({ error: 'Erro interno ao criar o pedido.' });
     }
 });
 
+// ROTA DE ATUALIZAÇÃO DE STATUS (ONDE AS NOTIFICAÇÕES ACONTECEM)
 app.post('/api/orders/:id', async (req, res) => {
     const { id } = req.params;
     const { newStatus, motoboyId } = req.body;
@@ -331,24 +281,13 @@ app.post('/api/orders/:id', async (req, res) => {
         const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
         if (error) throw error;
 
-        if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
-            
-            // Agendamos o envio da mensagem para 2 horas depois.
-            // 7200000 milissegundos = 2 horas
-            setTimeout(async () => {
-                try {
-                    // Substitua pelo seu link de avaliação do Google!
-                    const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review"; 
-                    
-                    const feedbackMsg = `Olá, ${updatedOrder.customer_name}! ${getGreetingByTime()}!\n\nEspero que tenha gostado da sua pizza! 🍕\n\nSua opinião é muito importante para nós. Se puder, deixe uma avaliação pra gente no Google? Leva só um minutinho!\n\n${googleReviewLink}\n\nMuito obrigado e até a próxima! 😊`;
+        // --- LÓGICA DE NOTIFICAÇÕES POR STATUS ---
 
-                    await sendWhatsappMessage(updatedOrder.customer_phone, feedbackMsg);
-                } catch (e) {
-                    console.error(`Erro ao enviar mensagem de feedback para o pedido #${id}:`, e);
-                }
-            }, 7200000);
+        if (newStatus === 'Em Preparo' && updatedOrder.customer_phone) {
+            const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
+            const confirmationMsg = `Olá, ${updatedOrder.customer_name}! Seu pedido *#${updatedOrder.id}* foi confirmado! ✅\n\nNossa cozinha já está a todo vapor preparando sua pizza. Logo logo te avisamos das próximas etapas!\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nQualquer dúvida, estamos por aqui! 👨‍🍳`;
+            await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
         }
-
         if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
             const msg = `Boas notícias, ${updatedOrder.customer_name}! 🎉\n\nSeu pedido *#${updatedOrder.id}* já está quentinho e pronto te esperando aqui na pizzaria!`;
             await sendWhatsappMessage(updatedOrder.customer_phone, msg);
@@ -380,10 +319,32 @@ app.post('/api/orders/:id', async (req, res) => {
                 }
             }
         }
+        if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
+            await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: updatedOrder.final_price, order_id: updatedOrder.id }]);
+            setTimeout(async () => {
+                try {
+                    const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review"; 
+                    const feedbackMsg = `Olá, ${updatedOrder.customer_name}! ${getGreetingByTime()}!\n\nEspero que tenha gostado da sua pizza! 🍕\n\nSua opinião é muito importante para nós. Se puder, deixe uma avaliação pra gente no Google? Leva só um minutinho!\n\n${googleReviewLink}\n\nMuito obrigado e até a próxima! 😊`;
+                    await sendWhatsappMessage(updatedOrder.customer_phone, feedbackMsg);
+                } catch (e) {
+                    console.error(`Erro ao enviar mensagem de feedback para o pedido #${id}:`, e);
+                }
+            }, 7200000);
+        }
         res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
     } catch (error) { 
         console.error(`Erro detalhado ao atualizar o pedido #${id}:`, error);
         res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); 
+    }
+});
+
+app.get('/api/orders/:id/finalize', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await supabase.from('orders').update({ status: 'Finalizado' }).eq('id', id);
+        res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
+    } catch (error) {
+        res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
     }
 });
 
