@@ -108,69 +108,24 @@ app.post('/api/whatsapp', (req, res) => {
 });
 
 
-// --- LÓGICA DE NEGÓCIO (IA) ---
-// Esta função não precisa de nenhuma alteração.
-const handleIncomingMessage = async (from, incomingMsg) => {
-    try {
-        const { data: status, error: statusError } = await supabase.from('pizzeria_status').select('is_open').single();
-        const { data: hours, error: hoursError } = await supabase.from('operating_hours').select('*').order('day_of_week');
-        if (statusError || hoursError) throw new Error('Falha ao buscar informações da pizzaria.');
+// --- LÓGICA DE NEGÓCIO (ATENDENTE AUTOMÁTICO APRIMORADO) ---
 
-        const recognizeIntent = (msg) => {
-            const intents = {
-                ORDER: ['pedido', 'cardápio', 'pizza', 'pedir', 'cardapio', 'quero', 'gostaria'],
-                HOURS: ['horário', 'horas', 'aberto', 'abrem', 'fechado', 'funcionamento'],
-                ADDRESS: ['endereço', 'local', 'onde fica', 'localização', 'endereco'],
-                GREETING: ['oi', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'opa', 'eai'],
-                THANKS: ['obrigado', 'obg', 'valeu', 'vlw', 'agradecido'],
-            };
-            for (const intent in intents) {
-                if (intents[intent].some(k => msg.includes(k))) return intent;
-            }
-            return 'UNKNOWN';
-        };
-        
-        const intent = recognizeIntent(incomingMsg);
-        let responseMsg = '';
-
-        switch (intent) {
-            case 'ORDER':
-                if (status.is_open) {
-                    responseMsg = `Olá! 👋 Que bom que você quer pedir uma pizza!\n\nPara ver nosso cardápio completo e fazer seu pedido de forma rápida e segura, acesse nosso site:\n\n*${clientPlatformUrl}*\n\nÉ só escolher, adicionar no carrinho e finalizar. Estamos te esperando! 😉🍕`;
-                } else {
-                    const nextOpening = getNextOpeningTime(hours);
-                    responseMsg = `Olá! No momento estamos fechados. 😢\n\n${nextOpening}\n\nAssim que abrirmos, será um prazer atender você!`;
-                }
-                break;
-            case 'HOURS':
-                const today = new Date().getDay();
-                responseMsg = `Nosso horário de funcionamento é:\n`;
-                hours.forEach(day => {
-                    const isToday = day.day_of_week === today;
-                    responseMsg += `\n${isToday ? '*HOJE* - ' : ''}*${day.day_name}:* ${day.is_open ? `${day.open_time} - ${day.close_time}` : 'Fechado'}`;
-                });
-                break;
-            case 'ADDRESS':
-                responseMsg = `Claro! Nosso endereço é:\n\n*R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nVocê pode ver no mapa e traçar a rota clicando aqui: https://maps.app.goo.gl/exemplo`;
-                break;
-            case 'GREETING':
-                responseMsg = `Olá! Bem-vindo(a) à Pizzaria do Dudo! 🍕\n\nComo posso te ajudar hoje?\n\n`;
-                break;
-            case 'THANKS':
-                responseMsg = `De nada! 😊 Se precisar de mais alguma coisa, é só chamar!`;
-                break;
-            default: // UNKNOWN
-                responseMsg = `Desculpe, não entendi. 🤔`;
-                break;
-        }
-        await sendWhatsappMessage(from, responseMsg);
-    } catch (error) {
-        console.error("Erro no processamento da IA:", error);
-        await sendWhatsappMessage(from, "Ops! Tivemos um probleminha aqui. Tente novamente em alguns instantes.");
-    }
+/**
+ * Retorna a saudação correta (Bom dia, Boa tarde, Boa noite) baseada no horário atual.
+ * @returns {string} A saudação.
+ */
+const getGreetingByTime = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return "Bom dia";
+    if (hour >= 12 && hour < 18) return "Boa tarde";
+    return "Boa noite";
 };
 
-// Esta função não precisa de nenhuma alteração.
+/**
+ * Encontra o próximo dia e horário de funcionamento da pizzaria.
+ * @param {Array} hours - Array com os horários de funcionamento de cada dia.
+ * @returns {string} Uma frase informando quando a pizzaria abrirá.
+ */
 const getNextOpeningTime = (hours) => {
     const now = new Date();
     const currentDay = now.getDay();
@@ -185,16 +140,155 @@ const getNextOpeningTime = (hours) => {
             const openTimeInMinutes = openHour * 60 + openMinute;
             
             if (i === 0 && currentTime < openTimeInMinutes) {
-                return `Abrimos *hoje* às ${dayData.open_time}.`;
+                return `Hoje nós abrimos às *${dayData.open_time}*.`;
             }
             if (i > 0) {
                 const dayName = i === 1 ? 'amanhã' : `na próxima ${dayData.day_name}`;
-                return `Abrimos ${dayName} às ${dayData.open_time}.`;
+                return `Nosso próximo dia de funcionamento é ${dayName}, a partir das *${dayData.open_time}*.`;
             }
         }
     }
-    return 'Consulte nossos horários para mais detalhes.';
+    return 'No momento não temos um próximo horário de funcionamento definido. Consulte nossas redes sociais!';
 };
+
+
+const handleIncomingMessage = async (from, incomingMsg) => {
+    try {
+        // Buscamos as informações em tempo real da pizzaria.
+        const { data: status, error: statusError } = await supabase.from('pizzeria_status').select('is_open').single();
+        const { data: hours, error: hoursError } = await supabase.from('operating_hours').select('*').order('day_of_week');
+        
+        if (statusError || hoursError) {
+            throw new Error('Falha ao buscar informações da pizzaria.');
+        }
+
+        /**
+         * Reconhece a intenção do usuário a partir da mensagem, usando palavras-chave.
+         * @param {string} msg - A mensagem do cliente.
+         * @returns {string} A intenção identificada ('ORDER', 'HOURS', etc.).
+         */
+        const recognizeIntent = (msg) => {
+            const lowerCaseMsg = msg.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove acentos
+            
+            const intents = {
+                TALK_TO_HUMAN: ['falar com', 'atendente', 'ligar', 'telefone', 'contato', 'problema', 'humano', 'falar com alguem', 'ajuda'],
+                ORDER: ['pedido', 'pedir', 'cardapio', 'pizza', 'quero', 'gostaria', 'fazer um pedido', 'ver as pizzas', 'menu', 'sabor', 'sabores'],
+                HOURS: ['horario', 'horas', 'aberto', 'abrem', 'fechado', 'funcionamento', 'que horas', 'tao aberto', 'ate que horas'],
+                ADDRESS: ['endereco', 'local', 'onde fica', 'localizacao', 'rua', 'pegar ai', 'buscar ai', 'retirar'],
+                GREETING: ['oi', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'opa', 'eai', 'tudo bem'],
+                THANKS: ['obrigado', 'obg', 'valeu', 'vlw', 'agradecido', 'grato', 'blz', 'beleza'],
+            };
+            
+            for (const intent in intents) {
+                if (intents[intent].some(keyword => lowerCaseMsg.includes(keyword))) {
+                    return intent;
+                }
+            }
+            return 'UNKNOWN';
+        };
+        
+        const intent = recognizeIntent(incomingMsg);
+        let responseMsg = '';
+        const greeting = getGreetingByTime();
+
+        switch (intent) {
+            case 'TALK_TO_HUMAN':
+                // IMPORTANTE: Substitua pelo telefone da sua pizzaria!
+                const phoneNumber = "(32) 99941-3289"; 
+                responseMsg = `Com certeza! Se for algo que precise resolver diretamente com a gente, nosso telefone é o *${phoneNumber}* 📞\n\nNosso atendimento por telefone funciona durante nosso horário de funcionamento, ok? Se for algo sobre o cardápio ou como pedir, posso te ajudar por aqui mesmo!`;
+                break;
+                
+            case 'ORDER':
+                if (status.is_open) {
+                    responseMsg = `Opa, que bom que bateu a fome! �\n\nPara ver nosso cardápio completo e fazer seu pedido rapidinho, é só acessar nosso site:\n\n➡️ *${clientPlatformUrl}*\n\nLá você escolhe tudo com calma e o pedido já cai direto na nossa cozinha. Estamos te esperando! 😉`;
+                } else {
+                    const nextOpening = getNextOpeningTime(hours);
+                    responseMsg = `${greeting}! No momento nossa cozinha está descansando. 😴\n\n${nextOpening}\n\nSalve nosso site e, assim que abrirmos, será um prazer te atender!`;
+                }
+                break;
+
+            case 'HOURS':
+                const today = new Date().getDay();
+                let hoursText = hours.map(day => {
+                    const isToday = day.day_of_week === today;
+                    return `${isToday ? '▶️ *HOJE* - ' : ''}*${day.day_name}:* ${day.is_open ? `${day.open_time} às ${day.close_time}` : 'Fechado'}`;
+                }).join('\n');
+                responseMsg = `Claro! Nosso horário de funcionamento é este aqui:\n\n${hoursText}\n\nQualquer dúvida, é só chamar! 👍`;
+                break;
+
+            case 'ADDRESS':
+                responseMsg = `Estamos te esperando! Nosso endereço para retirada é:\n\n📍 *R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nPara facilitar, aqui está o link direto para o mapa:\nhttps://maps.app.goo.gl/HTKU9ooFeibhL7yz5`;
+                break;
+
+            case 'GREETING':
+                // RESPOSTA MAIS HUMANA:
+                responseMsg = `${greeting}! Aqui é da Forneria 360, tudo bem? 😊\n\nComo posso te ajudar?`;
+                break;
+
+            case 'THANKS':
+                responseMsg = `Imagina, por nada! Precisando, é só chamar. 😉`;
+                break;
+
+            default: // UNKNOWN
+                // RESPOSTA PADRÃO MAIS HUMANA:
+                responseMsg = `Desculpe, não entendi sua mensagem. 🤔\n\nSe precisar de ajuda com o cardápio, nosso horário ou endereço, pode me perguntar que eu te ajudo!`;
+                break;
+        }
+        
+        await sendWhatsappMessage(from, responseMsg);
+
+    } catch (error) {
+        console.error("Erro no processamento da mensagem:", error);
+        await sendWhatsappMessage(from, "Ops! Tivemos um probleminha no nosso sistema. 🤖 Por favor, tente novamente em alguns instantes.");
+    }
+};
+
+// --- NOVA FUNCIONALIDADE DE FEEDBACK ---
+// A lógica de pedir feedback foi adicionada na rota que atualiza o status do pedido.
+// É o local ideal para disparar ações pós-venda.
+
+app.post('/api/orders/:id', async (req, res) => {
+    const { id } = req.params;
+    const { newStatus, motoboyId } = req.body;
+    if (!newStatus) return res.status(400).json({ error: 'O novo status é obrigatório.' });
+
+    try {
+        const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
+        if (error) throw error;
+
+        // --- LÓGICA DE FEEDBACK ADICIONADA AQUI ---
+        if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
+            
+            // Agendamos o envio da mensagem para 2 horas depois.
+            // 7200000 milissegundos = 2 horas
+            setTimeout(async () => {
+                try {
+                    // Substitua pelo seu link de avaliação do Google!
+                    const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review"; 
+                    
+                    const feedbackMsg = `Olá, ${updatedOrder.customer_name}! ${getGreetingByTime()}!\n\nEspero que tenha gostado da sua pizza! 🍕\n\nSua opinião é muito importante para nós. Se puder, deixe uma avaliação pra gente no Google? Leva só um minutinho!\n\n${googleReviewLink}\n\nMuito obrigado e até a próxima! 😊`;
+
+                    await sendWhatsappMessage(updatedOrder.customer_phone, feedbackMsg);
+                } catch (e) {
+                    console.error(`Erro ao enviar mensagem de feedback para o pedido #${id}:`, e);
+                }
+            }, 7200000);
+        }
+
+        // O resto da sua lógica de notificação para motoboy, etc., continua aqui.
+        if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
+            // ... (código existente)
+        }
+        if (newStatus === 'Saiu para Entrega') {
+            // ... (código existente)
+        }
+        
+        res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
+    } catch (error) { 
+        console.error(`Erro detalhado ao atualizar o pedido #${id}:`, error);
+        res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); 
+    }
+});
 
 
 // --- ROTAS DE STATUS ---
@@ -290,13 +384,13 @@ app.post('/api/orders', async (req, res) => {
         
         const { data: completeOrder } = await supabase.from('orders').select('*, order_items(*)').eq('id', newOrder.id).single();
 
-        /*/
-        if (completeOrder.customer_phone) {
-            const itemsList = completeOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
-            const confirmationMsg = `Olá, ${completeOrder.customer_name}! ✅\n\nConfirmamos o seu pedido *#${completeOrder.id}*! Ele já está na nossa cozinha.\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${completeOrder.final_price.toFixed(2)}\n*Pagamento:* ${completeOrder.payment_method}\n\nVamos te atualizando por aqui! 🍕`;
-            await sendWhatsappMessage(completeOrder.customer_phone, confirmationMsg);
+        
+        if (newStatus === 'Em Preparo' && updatedOrder.customer_phone) {
+            const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
+            const confirmationMsg = `Olá, ${updatedOrder.customer_name}! Seu pedido *#${updatedOrder.id}* foi confirmado! ✅\n\nNossa cozinha já está a todo vapor preparando sua pizza. Logo logo te avisamos das próximas etapas!\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nQualquer dúvida, estamos por aqui! 👨‍🍳`;
+            await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
         }
-        */
+        
 
         res.status(201).json(completeOrder);
     } catch (error) {
@@ -318,12 +412,12 @@ app.post('/api/orders/:id', async (req, res) => {
         }
 
         if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
-            const msg = `Boas notícias! 🎉\n\nSeu pedido *#${updatedOrder.id}* está pronto para retirada!`;
+            const msg = `Boas notícias, ${updatedOrder.customer_name}! 🎉\n\nSeu pedido *#${updatedOrder.id}* já está quentinho e pronto te esperando aqui na pizzaria!`;
             await sendWhatsappMessage(updatedOrder.customer_phone, msg);
         }
         if (newStatus === 'Saiu para Entrega') {
             if (updatedOrder.customer_phone) {
-                const customerMsg = `Seu pedido *#${updatedOrder.id}* saiu para entrega! 🛵\n\nLogo logo chega aí!`;
+                const customerMsg = `Fique de olho! 👀\n\nSeu pedido *#${updatedOrder.id}* já saiu para entrega com nosso motoboy e está a caminho do seu endereço! 🛵`;
                 await sendWhatsappMessage(updatedOrder.customer_phone, customerMsg);
             }
             if (motoboyId) {
@@ -343,7 +437,7 @@ app.post('/api/orders/:id', async (req, res) => {
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
                     
-                    const message = `*Novo Pedido para Entrega: #${updatedOrder.id}* 🛵\n\n*Cliente:* ${updatedOrder.customer_name}\n*Telefone:* ${updatedOrder.customer_phone}\n\n*Endereço:* ${cleanAddress}\n*Link do Mapa:* ${mapsLink}\n\n---\n*Itens:*\n${itemsList}\n---\n\n*Pagamento na Entrega:*\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Forma:* ${updatedOrder.payment_method}\n\n---\n👇 *AO ENTREGAR, CLIQUE AQUI:* 👇\n${finalizeLink}`;
+                    const message = `*Nova Entrega: Pedido #${updatedOrder.id}* 🛵\n\n*Cliente:* ${updatedOrder.customer_name}\n*Telefone:* ${updatedOrder.customer_phone}\n\n*Endereço:* ${cleanAddress}\n*Link do Mapa:* ${mapsLink}\n\n---\n*Itens:*\n${itemsList}\n---\n\n*Pagamento na Entrega:*\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Forma:* ${updatedOrder.payment_method}\n\n---\n👇 *AO ENTREGAR, CLIQUE AQUI:* 👇\n${finalizeLink}`;
                     await sendWhatsappMessage(motoboy.whatsapp_number, message);
                 }
             }
@@ -819,7 +913,7 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
       if (error) throw error;
       
       if (data.customer_phone) {
-          const msg = `Olá, ${data.customer_name}. Gostaríamos de informar que o seu pedido *#${data.id}* foi cancelado"`;
+          const msg = `Olá, ${data.customer_name}. Gostaríamos de informar que infelizmente o seu pedido *#${data.id}* foi cancelado"`;
           await sendWhatsappMessage(data.customer_phone, msg);
       }
 

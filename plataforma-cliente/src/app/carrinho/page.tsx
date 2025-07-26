@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useCartStore } from '@/store/cartStore';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -7,12 +8,14 @@ import { Plus, Minus, Trash2 } from 'lucide-react';
 import { useUserStore } from '@/store/userStore';
 import { toast, Toaster } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import LoginModal from '@/components/LoginModal';
 
 export default function CartPage() {
   const { items, increaseQuantity, decreaseQuantity, removeItem } = useCartStore();
   const { isAuthenticated } = useUserStore();
   const router = useRouter();
 
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   // --- CORREÇÃO AQUI ---
   // O subtotal agora soma o preço do produto + o preço de todos os extras.
   const subtotal = items.reduce((acc, item) => {
@@ -23,9 +26,11 @@ export default function CartPage() {
 
   const handleCheckout = () => {
     if (!isAuthenticated) {
-      toast.error('Por favor, faça o login para continuar.');
-      return;
+      // Em vez de mostrar um toast, agora abrimos o modal de login
+      setIsLoginModalOpen(true);
+      return; // Interrompe a execução para não tentar redirecionar
     }
+    // Se o usuário já estiver logado, ele segue para o checkout normalmente
     router.push('/checkout');
   };
 
@@ -42,8 +47,13 @@ export default function CartPage() {
       </div>
     );
   }
-
   return (
+    <>
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
+     />
+
     <div className="container mx-auto px-4 py-8">
       <Toaster position="top-center" />
       <h1 className="text-2xl font-bold mb-6">Seu Carrinho</h1>
@@ -54,6 +64,7 @@ export default function CartPage() {
           // A chave agora é o 'cartItemId', que é sempre único.
           <div key={item.cartItemId} className="flex items-start bg-white p-3 rounded-lg shadow-sm">
             <Image src={item.product.image_url!} alt={item.product.name} width={80} height={80} className="rounded-md" />
+            
             <div className="ml-4 flex-grow">
               <p className="font-bold">{item.product.name}</p>
               {/* Mostra os extras selecionados */}
@@ -108,5 +119,6 @@ export default function CartPage() {
         </button>
       </div>
     </div>
+  </>  
   );
 }

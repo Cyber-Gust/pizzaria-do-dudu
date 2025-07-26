@@ -26,6 +26,12 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true) }, []);
 
+  useEffect(() => {
+    if (isMounted && !isAuthenticated) {
+      setIsLoginModalOpen(true);
+    }
+  }, [isMounted, isAuthenticated]);
+
   const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review";
   const handleReviewClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!isAuthenticated) {

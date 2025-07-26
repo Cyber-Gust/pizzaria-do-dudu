@@ -94,6 +94,9 @@ export interface OrderPayload {
   observations?: string;
   order_type: 'delivery' | 'pickup';
   items: OrderItemPayload[];
+  discount_amount?: number;
+  delivery_fee?: number;
+  
 }
 
 // Adicione esta interface e função ao seu arquivo src/lib/api.ts

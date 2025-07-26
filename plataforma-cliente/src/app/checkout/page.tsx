@@ -145,6 +145,8 @@ export default function CheckoutPage() {
       address: orderType === 'delivery' ? `${address} (Taxa: R$ ${selectedFee.toFixed(2)})` : 'Retirada no local',
       payment_method: paymentMethod,
       order_type: orderType,
+      discount_amount: discount,
+      delivery_fee: orderType === 'delivery' ? selectedFee : 0,
       observations: observations,
       items: items.map(item => {
         const itemType = 'stock_quantity' in item.product ? 'drink' : 'pizza';

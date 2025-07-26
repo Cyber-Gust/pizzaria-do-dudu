@@ -54,8 +54,6 @@ export default function PedidosPage() {
   const [deliveryFees, setDeliveryFees] = useState<DeliveryFee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [soundEnabled, setSoundEnabled] = useState(false);
 
   const [motoboyModal, setMotoboyModal] = useState<{ isOpen: boolean, order: Order | null }>({ isOpen: false, order: null });
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
@@ -63,7 +61,7 @@ export default function PedidosPage() {
 
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -302,17 +300,6 @@ export default function PedidosPage() {
     }
   }, []);
 
-  const enableSound = () => {
-    audioRef.current?.play().then(() => {
-      audioRef.current?.pause();
-      setSoundEnabled(true);
-      alert('As notificações sonoras foram ativadas!');
-    }).catch(e => {
-      console.error("Erro ao tentar ativar o áudio:", e);
-      alert('O seu navegador bloqueou a ativação automática do som.');
-    });
-  };
-
   useEffect(() => {
     const handleRealtimeChange = (payload: any) => {
       if (payload.eventType === 'INSERT') {
@@ -321,9 +308,6 @@ export default function PedidosPage() {
           .then(({ data: items }) => {
             const completeOrder = { ...newOrder, order_items: items as OrderItem[] };
             setOrders((current) => [completeOrder, ...current.filter(o => o.id !== completeOrder.id)]);
-            if (soundEnabled) {
-              audioRef.current?.play().catch(e => console.error("Erro ao tocar áudio:", e));
-            }
           });
       }
       if (payload.eventType === 'UPDATE') {
@@ -348,7 +332,7 @@ export default function PedidosPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, soundEnabled]);
+  }, [supabase]);
 
 
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
@@ -484,20 +468,11 @@ export default function PedidosPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Pedidos Ativos</h1>
         <div className="flex items-center space-x-3">
-          <button
-            onClick={enableSound}
-            className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
-            title={soundEnabled ? 'Notificações sonoras ativadas' : 'Clique para ativar as notificações sonoras'}
-          >
-            {soundEnabled ? <Bell size={20} /> : <BellOff size={20} />}
-          </button>
           <button onClick={() => setIsNewOrderModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">
             Gerar Novo Pedido
           </button>
         </div>
       </div>
-
-      <audio ref={audioRef} src="/notificacao.mp3" preload="auto"></audio>
 
       <div className="space-y-4">
         {orders.map((order) => (
