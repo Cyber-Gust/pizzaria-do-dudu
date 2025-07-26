@@ -220,7 +220,7 @@ app.post('/api/status', async (req, res) => {
 // --- ROTAS DE PEDIDOS ---
 app.get('/api/orders', async (req, res) => {
     try {
-        const { data, error } = await supabase.from('orders').select(`*, order_items (*)`).not('status', 'in', '("Finalizado", "Cancelado")').order('created_at', { ascending: true });
+        const { data, error } = await supabase.from('orders').select(`*, order_items (*)`).not('status', 'in', '("Finalizado")').not('status', 'in', '("Cancelado")').order('created_at', { ascending: true });
         if (error) throw error;
         res.status(200).json(data);
     } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }
@@ -284,7 +284,7 @@ app.post('/api/orders/:id', async (req, res) => {
         // IMPORTANTE: Substitua os SIDs pelos seus templates REAIS da Twilio!
 
         if (newStatus === 'Em Preparo' && updatedOrder.customer_phone) {
-            const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
+            const itemsList = updatedOrder.order_items.map(item => `${item.quantity}x ${item.item_name}`).join('; ');
             await sendWhatsappTemplateMessage(
                 updatedOrder.customer_phone,
                 'HXb862a844d4eec105b4599954955b87db', // SID para 'confirmacao_preparo'
@@ -321,7 +321,7 @@ app.post('/api/orders/:id', async (req, res) => {
             if (motoboyId) {
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
                 if (motoboy && motoboy.whatsapp_number) {
-                    const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
+                    const itemsList = updatedOrder.order_items.map(item => `${item.quantity}x ${item.item_name}`).join('; ');
                     const cleanAddress = (updatedOrder.address || '').split('(Taxa:')[0].trim();
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
