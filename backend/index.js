@@ -47,50 +47,29 @@ app.use(express.urlencoded({ extended: true }));
 
 
 // --- [ATUALIZADO] FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS COM TWILIO ---
-/**
- * Envia uma mensagem de WhatsApp usando a API da Twilio.
- * @param {string} to - O número do destinatário.
- * @param {string} body - O corpo da mensagem a ser enviada.
- */
 const sendWhatsappMessage = async (to, body) => {
-  try {
-    // 1. Limpa o número de qualquer caractere não numérico.
-    let cleanNumber = String(to).replace(/\D/g, '');
-
-    // 2. Remove o código do país '55' se ele existir, para focar no número local.
-    if (cleanNumber.startsWith('55')) {
-      cleanNumber = cleanNumber.substring(2);
+    try {
+        let cleanNumber = String(to).replace(/\D/g, '');
+        if (cleanNumber.startsWith('55')) {
+            cleanNumber = cleanNumber.substring(2);
+        }
+        if (cleanNumber.length === 11 && cleanNumber.charAt(2) === '9') {
+            const ddd = cleanNumber.substring(0, 2);
+            const numberWithoutNine = cleanNumber.substring(3);
+            cleanNumber = ddd + numberWithoutNine;
+        }
+        const finalNumber = `55${cleanNumber}`;
+        const messageOptions = {
+            body: body,
+            from: twilioWhatsappNumber,
+            to: `whatsapp:+${finalNumber}`
+        };
+        console.log(`Tentando enviar via Twilio para ${messageOptions.to}`);
+        await twilioClient.messages.create(messageOptions);
+        console.log(`Mensagem enviada com sucesso para ${finalNumber}`);
+    } catch (error) {
+        console.error(`Erro ao enviar mensagem via Twilio para ${to}:`, error.message);
     }
-    // cleanNumber agora é algo como '37999542651'
-
-    // 3. LÓGICA PARA REMOVER O NONO DÍGITO
-    // Verifica se o número tem 11 dígitos (DDD + 9 + 8 dígitos) e se o terceiro dígito é '9'
-    if (cleanNumber.length === 11 && cleanNumber.charAt(2) === '9') {
-        const ddd = cleanNumber.substring(0, 2); // Pega '37'
-        const numberWithoutDDD = cleanNumber.substring(2); // Pega '999542651'
-        const numberWithoutNine = numberWithoutDDD.substring(1); // Pega '99542651'
-        
-        // Remonta o número local com 8 dígitos
-        cleanNumber = ddd + numberWithoutNine; // vira '3799542651'
-        console.log(`Nono dígito removido. Novo número local: ${cleanNumber}`);
-    }
-
-    // 4. Adiciona o código do país '55' de volta.
-    const finalNumber = `55${cleanNumber}`;
-
-    const messageOptions = {
-      body: body,
-      from: process.env.TWILIO_WHATSAPP_NUMBER,
-      to: `whatsapp:+${finalNumber}`
-    };
-
-    console.log(`Tentando enviar via Twilio para ${messageOptions.to}`);
-    await twilioClient.messages.create(messageOptions);
-    console.log(`Mensagem enviada com sucesso para ${finalNumber}`);
-
-  } catch (error) {
-    console.error(`Erro ao enviar mensagem via Twilio para ${to}:`, error.message);
-  }
 };
 
 
@@ -121,11 +100,6 @@ const getGreetingByTime = () => {
     return "Boa noite";
 };
 
-/**
- * Encontra o próximo dia e horário de funcionamento da pizzaria.
- * @param {Array} hours - Array com os horários de funcionamento de cada dia.
- * @returns {string} Uma frase informando quando a pizzaria abrirá.
- */
 const getNextOpeningTime = (hours) => {
     const now = new Date();
     const currentDay = now.getDay();
@@ -134,11 +108,9 @@ const getNextOpeningTime = (hours) => {
     for (let i = 0; i < 7; i++) {
         const dayToCheckIndex = (currentDay + i) % 7;
         const dayData = hours.find(h => h.day_of_week === dayToCheckIndex);
-
         if (dayData && dayData.is_open && dayData.open_time) {
             const [openHour, openMinute] = dayData.open_time.split(':').map(Number);
             const openTimeInMinutes = openHour * 60 + openMinute;
-            
             if (i === 0 && currentTime < openTimeInMinutes) {
                 return `Hoje nós abrimos às *${dayData.open_time}*.`;
             }
@@ -148,7 +120,7 @@ const getNextOpeningTime = (hours) => {
             }
         }
     }
-    return 'No momento não temos um próximo horário de funcionamento definido. Consulte nossas redes sociais!';
+    return 'No momento não temos um próximo horário de funcionamento definido.';
 };
 
 
@@ -242,54 +214,6 @@ const handleIncomingMessage = async (from, incomingMsg) => {
         await sendWhatsappMessage(from, "Ops! Tivemos um probleminha no nosso sistema. 🤖 Por favor, tente novamente em alguns instantes.");
     }
 };
-
-// --- NOVA FUNCIONALIDADE DE FEEDBACK ---
-// A lógica de pedir feedback foi adicionada na rota que atualiza o status do pedido.
-// É o local ideal para disparar ações pós-venda.
-
-app.post('/api/orders/:id', async (req, res) => {
-    const { id } = req.params;
-    const { newStatus, motoboyId } = req.body;
-    if (!newStatus) return res.status(400).json({ error: 'O novo status é obrigatório.' });
-
-    try {
-        const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
-        if (error) throw error;
-
-        // --- LÓGICA DE FEEDBACK ADICIONADA AQUI ---
-        if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
-            
-            // Agendamos o envio da mensagem para 2 horas depois.
-            // 7200000 milissegundos = 2 horas
-            setTimeout(async () => {
-                try {
-                    // Substitua pelo seu link de avaliação do Google!
-                    const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review"; 
-                    
-                    const feedbackMsg = `Olá, ${updatedOrder.customer_name}! ${getGreetingByTime()}!\n\nEspero que tenha gostado da sua pizza! 🍕\n\nSua opinião é muito importante para nós. Se puder, deixe uma avaliação pra gente no Google? Leva só um minutinho!\n\n${googleReviewLink}\n\nMuito obrigado e até a próxima! 😊`;
-
-                    await sendWhatsappMessage(updatedOrder.customer_phone, feedbackMsg);
-                } catch (e) {
-                    console.error(`Erro ao enviar mensagem de feedback para o pedido #${id}:`, e);
-                }
-            }, 7200000);
-        }
-
-        // O resto da sua lógica de notificação para motoboy, etc., continua aqui.
-        if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
-            // ... (código existente)
-        }
-        if (newStatus === 'Saiu para Entrega') {
-            // ... (código existente)
-        }
-        
-        res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
-    } catch (error) { 
-        console.error(`Erro detalhado ao atualizar o pedido #${id}:`, error);
-        res.status(500).json({ error: `Erro ao atualizar o pedido #${id}.` }); 
-    }
-});
-
 
 // --- ROTAS DE STATUS ---
 app.get('/api/status', async (req, res) => {
@@ -407,8 +331,22 @@ app.post('/api/orders/:id', async (req, res) => {
         const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
         if (error) throw error;
 
-        if (newStatus === 'Finalizado') {
-            await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: updatedOrder.final_price, order_id: updatedOrder.id }]);
+        if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
+            
+            // Agendamos o envio da mensagem para 2 horas depois.
+            // 7200000 milissegundos = 2 horas
+            setTimeout(async () => {
+                try {
+                    // Substitua pelo seu link de avaliação do Google!
+                    const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review"; 
+                    
+                    const feedbackMsg = `Olá, ${updatedOrder.customer_name}! ${getGreetingByTime()}!\n\nEspero que tenha gostado da sua pizza! 🍕\n\nSua opinião é muito importante para nós. Se puder, deixe uma avaliação pra gente no Google? Leva só um minutinho!\n\n${googleReviewLink}\n\nMuito obrigado e até a próxima! 😊`;
+
+                    await sendWhatsappMessage(updatedOrder.customer_phone, feedbackMsg);
+                } catch (e) {
+                    console.error(`Erro ao enviar mensagem de feedback para o pedido #${id}:`, e);
+                }
+            }, 7200000);
         }
 
         if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {

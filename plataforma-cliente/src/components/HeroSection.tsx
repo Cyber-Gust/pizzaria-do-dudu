@@ -56,7 +56,7 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
             A Verdadeira!
           </h1>
           <p className="text-lg md:text-xl mb-8 drop-shadow-md">
-            A melhore pizza napolitana, feita com os melhores ingredientes, direto para você.
+            A melhor pizza napolitana, feita com os melhores ingredientes, direto para você.
           </p>
           <Link
             href="/cardapio"
