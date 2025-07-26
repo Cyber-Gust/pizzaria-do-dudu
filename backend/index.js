@@ -351,16 +351,18 @@ app.post('/api/orders/:id', async (req, res) => {
                 await sendWhatsappTemplateMessage(updatedOrder.customer_phone, templateSid, variables);
             }
             if (motoboyId) {
+                console.log(`[MOTOBOY] Buscando dados do motoboy com ID: ${motoboyId}`);
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
+                
                 if (motoboy && motoboy.whatsapp_number) {
+                    console.log(`[MOTOBOY] Motoboy encontrado: ${motoboy.name}. Preparando mensagem.`);
                     const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
                     const cleanAddress = (updatedOrder.address || '').split('(Taxa:')[0].trim();
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
 
-                    // --- CORREÇÃO APLICADA AQUI ---
-                    const templateSid = 'HXbae18f6ab37cc84be22657bde99aa7f9'; // Substitua pelo SID
-                    const variables = {
+                    const motoboyTemplateSid = 'HXbae18f6ab37cc84be22657bde99aa7f9'; // Substitua pelo SID
+                    const motoboyVariables = {
                         '1': String(updatedOrder.id),
                         '2': updatedOrder.customer_name,
                         '3': updatedOrder.customer_phone,
@@ -371,9 +373,13 @@ app.post('/api/orders/:id', async (req, res) => {
                         '8': updatedOrder.payment_method,
                         '9': finalizeLink
                     };
-                    console.log(`DEBUG: Enviando template para MOTOBOY ${templateSid} com variáveis:`, JSON.stringify(variables, null, 2));
-                    await sendWhatsappTemplateMessage(motoboy.whatsapp_number, templateSid, variables);
+                    console.log(`[MOTOBOY] Preparando para enviar template ${motoboyTemplateSid}`);
+                    await sendWhatsappTemplateMessage(motoboy.whatsapp_number, motoboyTemplateSid, motoboyVariables);
+                } else {
+                    console.log(`[MOTOBOY] AVISO: Motoboy com ID ${motoboyId} foi selecionado, mas não foi encontrado ou não tem número de WhatsApp.`);
                 }
+            } else {
+                console.log("[MOTOBOY] INFO: Nenhum motoboyId foi fornecido para esta entrega.");
             }
         }
         if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
@@ -400,6 +406,16 @@ app.post('/api/orders/:id', async (req, res) => {
                     console.error(`Erro ao agendar mensagem de feedback para o pedido #${id}:`, e);
                 }
             }, 7200000); // 2 horas
+        }
+        if (newStatus === 'Cancelado' && updatedOrder.customer_phone) {
+            await sendWhatsappTemplateMessage(
+                updatedOrder.customer_phone,
+                'HX14009d44439ba3f7981ea7ff7a02ce70', // Substitua pelo SID do template 'pedido_cancelado'
+                {
+                    '1': updatedOrder.customer_name,
+                    '2': String(updatedOrder.id)
+                }
+            );
         }
         res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
     } catch (error) { 
@@ -445,12 +461,13 @@ app.post('/api/orders/:id/accept', async (req, res) => {
         if (!updatedOrder) return res.status(404).json({ error: 'Pedido não encontrado.' });
 
         // 2. MOVE A LÓGICA DE NOTIFICAÇÃO PARA CÁ
+        /*/
         if (updatedOrder.customer_phone) {
             const itemsList = updatedOrder.order_items.map(item => `   - ${item.quantity}x ${item.item_name}`).join('\n');
             const confirmationMsg = `Olá, ${updatedOrder.customer_name}! ✅\n\nConfirmamos o seu pedido *#${updatedOrder.id}*! Ele já está na nossa cozinha.\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nVamos te atualizando por aqui! 🍕`;
             await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
         }
-
+        */
         res.status(200).json({ message: 'Pedido aceito com sucesso!', data: updatedOrder });
 
     } catch (error) {
@@ -880,17 +897,6 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
         .select()
         .single();
       if (error) throw error;
-      
-      if (newStatus === 'Cancelado' && updatedOrder.customer_phone) {
-            await sendWhatsappTemplateMessage(
-                updatedOrder.customer_phone,
-                'HX14009d44439ba3f7981ea7ff7a02ce70', // Substitua pelo SID do template 'pedido_cancelado'
-                {
-                    '1': updatedOrder.customer_name,
-                    '2': String(updatedOrder.id)
-                }
-            );
-        }
 
       res.status(200).json({ message: 'Pedido cancelado com sucesso!', data });
     } catch (error) {
