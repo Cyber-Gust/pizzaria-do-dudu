@@ -320,10 +320,12 @@ app.post('/api/orders/:id', async (req, res) => {
                 'HHXb862a844d4eec105b4599954955b87db', // Substitua pelo SID do template 'confirmacao_preparo'
                 {
                     '1': updatedOrder.customer_name,
-                    '2': updatedOrder.id,
+                    '2': String(updatedOrder.id),
                     '3': itemsList
                 }
             );
+            console.log(`DEBUG: Enviando template ${templateSid} com variáveis:`, JSON.stringify(variables, null, 2));
+            await sendWhatsappTemplateMessage(updatedOrder.customer_phone, templateSid, variables);
         }
         if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
             await sendWhatsappTemplateMessage(
@@ -331,7 +333,7 @@ app.post('/api/orders/:id', async (req, res) => {
                 'HX976f2c60e3c42d8c0c3300f9a726999c', // Substitua pelo SID do template 'pronto_para_retirada'
                 {
                     '1': updatedOrder.customer_name,
-                    '2': updatedOrder.id
+                    '2': String(updatedOrder.id)
                 }
             );
         }
@@ -342,9 +344,11 @@ app.post('/api/orders/:id', async (req, res) => {
                     'HX54b87a9b3d1edbdf621e26c6f1f2b66a', // Substitua pelo SID do template 'saiu_para_entrega_cliente'
                     {
                         '1': updatedOrder.customer_name,
-                        '2': updatedOrder.id
+                        '2': String(updatedOrder.id)
                     }
                 );
+                console.log(`DEBUG: Enviando template ${templateSid} com variáveis:`, JSON.stringify(variables, null, 2));
+                await sendWhatsappTemplateMessage(updatedOrder.customer_phone, templateSid, variables);
             }
             if (motoboyId) {
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
@@ -367,7 +371,7 @@ app.post('/api/orders/:id', async (req, res) => {
                         motoboy.whatsapp_number,
                         'HXbae18f6ab37cc84be22657bde99aa7f9', // Substitua pelo SID do template 'nova_entrega_motoboy'
                         {
-                            '1': updatedOrder.id,
+                            '1': String(updatedOrder.id),
                             '2': updatedOrder.customer_name,
                             '3': updatedOrder.customer_phone,
                             '4': cleanAddress,
@@ -382,7 +386,15 @@ app.post('/api/orders/:id', async (req, res) => {
             }
         }
         if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
-            await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: updatedOrder.final_price, order_id: updatedOrder.id }]);
+            const pizzeriaIncome = updatedOrder.final_price - (updatedOrder.delivery_fee || 0);
+
+            // 2. Inserimos o valor corrigido no fluxo de caixa.
+            await supabase.from('cash_flow').insert([{ 
+                description: `Venda do Pedido #${updatedOrder.id}`, 
+                type: 'income', 
+                amount: pizzeriaIncome, // Usamos o valor corrigido aqui
+                order_id: updatedOrder.id 
+            }]);
             
             setTimeout(async () => {
                 try {
@@ -884,7 +896,7 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
                 'HX14009d44439ba3f7981ea7ff7a02ce70', // Substitua pelo SID do template 'pedido_cancelado'
                 {
                     '1': updatedOrder.customer_name,
-                    '2': updatedOrder.id
+                    '2': String(updatedOrder.id)
                 }
             );
         }
