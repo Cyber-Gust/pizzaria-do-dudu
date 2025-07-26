@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Bell, BellOff, ChevronDown, ChevronUp, Phone } from 'lucide-react';
+import { ChevronDown, ChevronUp, Phone } from 'lucide-react';
 
 // Tipagens
 type ExtraItem = { id: string; name: string; price: number };
@@ -21,12 +21,14 @@ type Order = {
   observations: string | null;
 };
 type Motoboy = { id: string; name: string; };
-type Product = { id: string; name: string; price: number; item_type: 'pizza' | 'drink' };
+export type Pizza = { id: string; name: string; price: number; item_type: 'pizza' };
+type Drink = { id: string; name: string; price: number; item_type: 'drink' };
+type Product = Pizza | Drink;
 type Extra = { id: string; price: number; ingredients: { name: string } };
 type DeliveryFee = { id: string; neighborhood_name: string; fee_amount: number; };
 
 type NewOrderItem = {
-  item_id: string;
+  item_id: string | null; // Permite nulo para meio a meio
   item_name: string;
   quantity: number;
   price_per_item: number;
@@ -61,7 +63,11 @@ export default function PedidosPage() {
 
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const [isHalfAndHalfModalOpen, setIsHalfAndHalfModalOpen] = useState(false);
+  const [firstHalfPizzaId, setFirstHalfPizzaId] = useState<string>('');
+  const [secondHalfPizzaId, setSecondHalfPizzaId] = useState<string>('');
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -214,7 +220,6 @@ export default function PedidosPage() {
     };
   }, [supabase]);
 
-  // --- FUNÇÃO CENTRALIZADA PARA ATUALIZAR STATUS ---
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
     try {
       const body = motoboyId ? { newStatus, motoboyId } : { newStatus };
@@ -318,6 +323,41 @@ export default function PedidosPage() {
       }
     }
   };
+
+  const handleOpenHalfAndHalfModal = () => setIsHalfAndHalfModalOpen(true);
+  
+  const handleCloseHalfAndHalfModal = () => {
+    setIsHalfAndHalfModalOpen(false);
+    setFirstHalfPizzaId('');
+    setSecondHalfPizzaId('');
+  };
+
+  const handleAddHalfAndHalfItem = () => {
+    if (!firstHalfPizzaId || !secondHalfPizzaId) {
+      alert('Por favor, selecione as duas metades da pizza.');
+      return;
+    }
+    const firstHalf = products.find(p => p.id === firstHalfPizzaId) as Pizza;
+    const secondHalf = products.find(p => p.id === secondHalfPizzaId) as Pizza;
+    if (!firstHalf || !secondHalf) {
+      alert('Erro ao encontrar as pizzas selecionadas.');
+      return;
+    }
+    const averagePrice = (firstHalf.price + secondHalf.price) / 2;
+    const itemName = `Meio a Meio: ${firstHalf.name} / ${secondHalf.name}`;
+    const newItem: NewOrderItem = {
+      item_id: null,
+      item_name: itemName,
+      quantity: 1,
+      price_per_item: averagePrice,
+      item_type: 'pizza',
+      extras: [],
+    };
+    setNewOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
+    handleCloseHalfAndHalfModal();
+  };
+  
+  const pizzaOptions = useMemo(() => products.filter((p): p is Pizza => p.item_type === 'pizza'), [products]);
 
   if (loading) return <p>A carregar pedidos...</p>;
   if (error) return <p className="text-red-500 bg-red-100 p-4 rounded-lg">Erro: {error}</p>;
@@ -494,9 +534,12 @@ export default function PedidosPage() {
               <label className="text-sm font-medium">Itens do Pedido</label>
               <div className="flex gap-2 mt-1">
                 <select onChange={e => handleNewOrderItemAdd(e.target.value)} value="" className="flex-grow p-2 border rounded">
-                  <option value="" disabled>Selecione um produto para adicionar...</option>
+                  <option value="" disabled>Adicionar item completo...</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price.toFixed(2)}</option>)}
                 </select>
+                <button type="button" onClick={handleOpenHalfAndHalfModal} className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold text-sm">
+                  Meio a Meio
+                </button>
               </div>
             </div>
             <div className="border rounded p-2 min-h-[150px] space-y-2">
@@ -547,6 +590,39 @@ export default function PedidosPage() {
               <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">Salvar Pedido</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {isHalfAndHalfModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
+            <h3 className="text-xl font-bold">Montar Pizza Meio a Meio</h3>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Primeira Metade</label>
+              <select value={firstHalfPizzaId} onChange={e => setFirstHalfPizzaId(e.target.value)} className="w-full p-2 border rounded">
+                <option value="" disabled>Selecione o primeiro sabor...</option>
+                {pizzaOptions.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price.toFixed(2)}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Segunda Metade</label>
+              <select value={secondHalfPizzaId} onChange={e => setSecondHalfPizzaId(e.target.value)} className="w-full p-2 border rounded">
+                <option value="" disabled>Selecione o segundo sabor...</option>
+                {pizzaOptions.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price.toFixed(2)}</option>)}
+              </select>
+            </div>
+
+            <div className="pt-4 flex justify-end space-x-3">
+              <button type="button" onClick={handleCloseHalfAndHalfModal} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+                Cancelar
+              </button>
+              <button type="button" onClick={handleAddHalfAndHalfItem} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                Adicionar Pizza
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
