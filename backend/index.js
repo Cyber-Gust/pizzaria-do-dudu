@@ -35,7 +35,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
-// --- [ATUALIZADO] FUNÇÃO AUXILIAR PARA ENVIAR MENSAGENS COM TWILIO ---
+// --- FUNÇÕES AUXILIARES DE MENSAGERIA ---
 const sendWhatsappMessage = async (to, body) => {
     try {
         let cleanNumber = String(to).replace(/\D/g, '');
@@ -47,17 +47,17 @@ const sendWhatsappMessage = async (to, body) => {
             const numberWithoutNine = cleanNumber.substring(3);
             cleanNumber = ddd + numberWithoutNine;
         }
-        const finalNumber = `55${cleanNumber}`;
+        const finalNumber = `whatsapp:+55${cleanNumber}`;
         const messageOptions = {
             body: body,
             from: twilioWhatsappNumber,
-            to: `whatsapp:+${finalNumber}`
+            to: finalNumber
         };
-        console.log(`Tentando enviar via Twilio para ${messageOptions.to}`);
+        console.log(`Tentando enviar MENSAGEM LIVRE para ${finalNumber}`);
         await twilioClient.messages.create(messageOptions);
-        console.log(`Mensagem enviada com sucesso para ${finalNumber}`);
+        console.log(`Mensagem livre enviada com sucesso para ${finalNumber}`);
     } catch (error) {
-        console.error(`Erro ao enviar mensagem via Twilio para ${to}:`, error.message);
+        console.error(`Erro ao enviar mensagem livre para ${to}:`, error.message);
     }
 };
 
@@ -73,40 +73,33 @@ const sendWhatsappTemplateMessage = async (to, templateSid, variables) => {
             cleanNumber = ddd + numberWithoutNine;
         }
         const finalNumber = `whatsapp:+55${cleanNumber}`;
-
-        // A estrutura da mensagem de template é diferente.
-        // Usamos 'contentSid' e 'contentVariables' em vez de 'body'.
         const messageOptions = {
             contentSid: templateSid,
             contentVariables: JSON.stringify(variables),
             from: twilioWhatsappNumber,
             to: finalNumber
         };
-
-        console.log(`Tentando enviar TEMPLATE ${templateSid} para ${finalNumber}`);
+        console.log(`Tentando enviar TEMPLATE ${templateSid} para ${finalNumber} com variáveis:`, JSON.stringify(variables));
         await twilioClient.messages.create(messageOptions);
         console.log(`Template ${templateSid} enviado com sucesso para ${finalNumber}`);
-
     } catch (error) {
         console.error(`Erro ao enviar template ${templateSid} para ${to}:`, error.message);
+        throw error;
     }
 };
 
-// --- [ATUALIZADO] WEBHOOK DO WHATSAPP PARA RECEBER MENSAGENS DA TWILIO ---
+// --- WEBHOOK DO WHATSAPP ---
 app.post('/api/whatsapp', (req, res) => {
     const incomingMsg = req.body.Body.toLowerCase().trim();
     const from = req.body.From.replace('whatsapp:+', '');
-    
     console.log(`Mensagem recebida de ${from}: ${incomingMsg}`);
-    
     handleIncomingMessage(from, incomingMsg);
-
     res.setHeader('Content-Type', 'text/xml');
     res.send('<Response></Response>');
 });
 
 
-// --- LÓGICA DE NEGÓCIO (ATENDENTE AUTOMÁTICO) ---
+// --- LÓGICA DO ATENDENTE AUTOMÁTICO ---
 const getGreetingByTime = () => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) return "Bom dia";
@@ -118,7 +111,6 @@ const getNextOpeningTime = (hours) => {
     const now = new Date();
     const currentDay = now.getDay();
     const currentTime = now.getHours() * 60 + now.getMinutes();
-
     for (let i = 0; i < 7; i++) {
         const dayToCheckIndex = (currentDay + i) % 7;
         const dayData = hours.find(h => h.day_of_week === dayToCheckIndex);
@@ -185,7 +177,7 @@ const handleIncomingMessage = async (from, incomingMsg) => {
                 responseMsg = `Claro! Nosso horário de funcionamento é este aqui:\n\n${hoursText}\n\nQualquer dúvida, é só chamar! 👍`;
                 break;
             case 'ADDRESS':
-                responseMsg = `Estamos te esperando! Nosso endereço para retirada é:\n\n📍 *R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nPara facilitar, aqui está o link direto para o mapa:\nhttp://googleusercontent.com/maps/google.com/2`;
+                responseMsg = `Estamos te esperando! Nosso endereço para retirada é:\n\n📍 *R. Coronel Tamarindo, 73A - Centro, São João del Rei*\n\nPara facilitar, aqui está o link direto para o mapa:\nhttps://maps.app.goo.gl/HTKU9ooFeibhL7yz5`;
                 break;
             case 'GREETING':
                 responseMsg = `${greeting}! Aqui é da Forneria 360, tudo bem? 😊\n\nComo posso te ajudar?`;
@@ -226,20 +218,12 @@ app.post('/api/status', async (req, res) => {
 });
 
 // --- ROTAS DE PEDIDOS ---
-
-// [CORRIGIDO] Rota para buscar os pedidos ativos
 app.get('/api/orders', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`*, order_items (*)`)
-      // A linha abaixo agora ignora tanto 'Finalizado' como 'Cancelado' de forma mais eficiente
-      .not('status', 'in', '("Finalizado")') 
-      .not('status', 'in', '("Cancelado")') 
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }
+    try {
+        const { data, error } = await supabase.from('orders').select(`*, order_items (*)`).not('status', 'in', '("Finalizado", "Cancelado")').order('created_at', { ascending: true });
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar pedidos.' }); }
 });
 
 app.post('/api/orders', async (req, res) => {
@@ -248,14 +232,11 @@ app.post('/api/orders', async (req, res) => {
         return res.status(400).json({ error: 'Dados do pedido incompletos.' });
     }
     try {
-        console.log("1. Calculando totais do pedido...");
         const itemsTotal = items.reduce((acc, item) => {
             const extrasTotal = (item.extras || []).reduce((extraAcc, extra) => extraAcc + extra.price, 0);
             return acc + (item.quantity * item.price_per_item) + extrasTotal;
         }, 0);
         const finalPrice = (itemsTotal + delivery_fee) - discount_amount;
-
-        console.log("2. Inserindo pedido principal na tabela 'orders'...");
         const { data: newOrder, error: orderError } = await supabase.from('orders').insert({ 
             ...orderDetails, 
             observations: observations,
@@ -265,12 +246,8 @@ app.post('/api/orders', async (req, res) => {
             final_price: finalPrice,
             status: 'Aguardando Confirmação'
         }).select().single();
-
         if (orderError) throw orderError;
-        console.log(`3. Pedido #${newOrder.id} criado com sucesso.`);
-
         if (items.length > 0) {
-            console.log(`4. Inserindo ${items.length} itens na tabela 'order_items'...`);
             const orderItemsToInsert = items.map(item => ({
                 order_id: newOrder.id,
                 item_type: item.item_type,
@@ -282,141 +259,118 @@ app.post('/api/orders', async (req, res) => {
             }));
             const { error: itemsError } = await supabase.from('order_items').insert(orderItemsToInsert);
             if (itemsError) {
-                console.error(`ERRO ao inserir itens para o pedido #${newOrder.id}. Fazendo rollback...`);
                 await supabase.from('orders').delete().eq('id', newOrder.id);
                 throw itemsError;
             }
-            console.log("5. Itens inseridos com sucesso.");
         }
-        
-        console.log("6. Buscando pedido completo para retornar ao frontend...");
         const { data: completeOrder } = await supabase.from('orders').select('*, order_items(*)').eq('id', newOrder.id).single();
-        
-        // A ROTA TERMINA AQUI. Nenhuma lógica de notificação.
-        console.log("7. Enviando resposta de sucesso (201) para o frontend.");
         res.status(201).json(completeOrder);
-
     } catch (error) {
         console.error('ERRO CRÍTICO na rota de criação de pedido:', error);
         res.status(500).json({ error: 'Erro interno ao criar o pedido.' });
     }
 });
 
-// ROTA DE ATUALIZAÇÃO DE STATUS (ONDE AS NOTIFICAÇÕES ACONTECEM)
 app.post('/api/orders/:id', async (req, res) => {
     const { id } = req.params;
     const { newStatus, motoboyId } = req.body;
     if (!newStatus) return res.status(400).json({ error: 'O novo status é obrigatório.' });
+
     try {
         const { data: updatedOrder, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select('*, order_items(*)').single();
         if (error) throw error;
 
-        // --- LÓGICA DE NOTIFICAÇÕES POR STATUS ---
+        // --- LÓGICA DE NOTIFICAÇÕES REESTRUTURADA ---
+        // IMPORTANTE: Substitua os SIDs pelos seus templates REAIS da Twilio!
 
         if (newStatus === 'Em Preparo' && updatedOrder.customer_phone) {
             const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
             await sendWhatsappTemplateMessage(
                 updatedOrder.customer_phone,
-                'HXb862a844d4eec105b4599954955b87db', // Substitua pelo SID do template 'confirmacao_preparo'
+                'HXb862a844d4eec105b4599954955b87db', // SID para 'confirmacao_preparo'
                 {
                     '1': updatedOrder.customer_name,
                     '2': String(updatedOrder.id),
                     '3': itemsList
                 }
             );
-            console.log(`DEBUG: Enviando template ${templateSid} com variáveis:`, JSON.stringify(variables, null, 2));
-            await sendWhatsappTemplateMessage(updatedOrder.customer_phone, templateSid, variables);
         }
+        
         if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
             await sendWhatsappTemplateMessage(
                 updatedOrder.customer_phone,
-                'HX976f2c60e3c42d8c0c3300f9a726999c', // Substitua pelo SID do template 'pronto_para_retirada'
+                'HX976f2c60e3c42d8c0c3300f9a726999c', // SID para 'pronto_para_retirada'
                 {
                     '1': updatedOrder.customer_name,
                     '2': String(updatedOrder.id)
                 }
             );
         }
+        
         if (newStatus === 'Saiu para Entrega') {
             if (updatedOrder.customer_phone) {
                 await sendWhatsappTemplateMessage(
                     updatedOrder.customer_phone,
-                    'HX54b87a9b3d1edbdf621e26c6f1f2b66a', // Substitua pelo SID do template 'saiu_para_entrega_cliente'
+                    'HX54b87a9b3d1edbdf621e26c6f1f2b66a', // SID para 'saiu_para_entrega_cliente'
                     {
                         '1': updatedOrder.customer_name,
                         '2': String(updatedOrder.id)
                     }
                 );
-                console.log(`DEBUG: Enviando template ${templateSid} com variáveis:`, JSON.stringify(variables, null, 2));
-                await sendWhatsappTemplateMessage(updatedOrder.customer_phone, templateSid, variables);
             }
             if (motoboyId) {
-                console.log(`[MOTOBOY] Buscando dados do motoboy com ID: ${motoboyId}`);
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
-                
                 if (motoboy && motoboy.whatsapp_number) {
-                    console.log(`[MOTOBOY] Motoboy encontrado: ${motoboy.name}. Preparando mensagem.`);
                     const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
                     const cleanAddress = (updatedOrder.address || '').split('(Taxa:')[0].trim();
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
-
-                    const motoboyTemplateSid = 'HXbae18f6ab37cc84be22657bde99aa7f9'; // Substitua pelo SID
-                    const motoboyVariables = {
-                        '1': String(updatedOrder.id),
-                        '2': updatedOrder.customer_name,
-                        '3': updatedOrder.customer_phone,
-                        '4': cleanAddress,
-                        '5': mapsLink,
-                        '6': itemsList,
-                        '7': updatedOrder.final_price.toFixed(2),
-                        '8': updatedOrder.payment_method,
-                        '9': finalizeLink
-                    };
-                    console.log(`[MOTOBOY] Preparando para enviar template ${motoboyTemplateSid}`);
-                    await sendWhatsappTemplateMessage(motoboy.whatsapp_number, motoboyTemplateSid, motoboyVariables);
-                } else {
-                    console.log(`[MOTOBOY] AVISO: Motoboy com ID ${motoboyId} foi selecionado, mas não foi encontrado ou não tem número de WhatsApp.`);
+                    await sendWhatsappTemplateMessage(
+                        motoboy.whatsapp_number,
+                        'HXbae18f6ab37cc84be22657bde99aa7f9', // SID para 'nova_entrega_motoboy'
+                        {
+                            '1': String(updatedOrder.id),
+                            '2': updatedOrder.customer_name,
+                            '3': updatedOrder.customer_phone,
+                            '4': cleanAddress,
+                            '5': mapsLink,
+                            '6': itemsList,
+                            '7': updatedOrder.final_price.toFixed(2),
+                            '8': updatedOrder.payment_method,
+                            '9': finalizeLink
+                        }
+                    );
                 }
-            } else {
-                console.log("[MOTOBOY] INFO: Nenhum motoboyId foi fornecido para esta entrega.");
             }
         }
+        
         if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
             const pizzeriaIncome = updatedOrder.final_price - (updatedOrder.delivery_fee || 0);
-
-            // 2. Inserimos o valor corrigido no fluxo de caixa.
-            await supabase.from('cash_flow').insert([{ 
-                description: `Venda do Pedido #${updatedOrder.id}`, 
-                type: 'income', 
-                amount: pizzeriaIncome, // Usamos o valor corrigido aqui
-                order_id: updatedOrder.id 
-            }]);
-            
+            await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: pizzeriaIncome, order_id: updatedOrder.id }]);
             setTimeout(async () => {
                 try {
                     await sendWhatsappTemplateMessage(
                         updatedOrder.customer_phone,
-                        'HX4f53242e7c369f2ad722095c41cd0f46', // Substitua pelo SID do template 'pedido_feedback'
-                        {
-                            '1': updatedOrder.customer_name
-                        }
+                        'HX4f53242e7c369f2ad722095c41cd0f46', // SID para 'pedido_feedback'
+                        { '1': updatedOrder.customer_name }
                     );
                 } catch (e) {
                     console.error(`Erro ao agendar mensagem de feedback para o pedido #${id}:`, e);
                 }
             }, 7200000); // 2 horas
         }
+        
         if (newStatus === 'Cancelado' && updatedOrder.customer_phone) {
             await sendWhatsappTemplateMessage(
                 updatedOrder.customer_phone,
-                'HX14009d44439ba3f7981ea7ff7a02ce70', // Substitua pelo SID do template 'pedido_cancelado'
+                'HX14009d44439ba3f7981ea7ff7a02ce70', // SID para 'pedido_cancelado'
                 {
                     '1': updatedOrder.customer_name,
                     '2': String(updatedOrder.id)
                 }
             );
         }
+        
         res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
     } catch (error) { 
         console.error(`Erro detalhado ao atualizar o pedido #${id}:`, error);
@@ -424,112 +378,33 @@ app.post('/api/orders/:id', async (req, res) => {
     }
 });
 
+// ROTA PARA O MOTOBOY FINALIZAR A ENTREGA (VIA LINK)
 app.get('/api/orders/:id/finalize', async (req, res) => {
     const { id } = req.params;
     try {
+        // Esta rota apenas atualiza o status. A notificação de feedback é
+        // disparada pela rota principal quando o status muda para 'Finalizado'.
         await supabase.from('orders').update({ status: 'Finalizado' }).eq('id', id);
         res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
     } catch (error) {
         res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
-    }
-});
-
-app.get('/api/orders/:id/finalize', async (req, res) => {
-    const { id } = req.params;
-    try {
-        await supabase.from('orders').update({ status: 'Finalizado' }).eq('id', id);
-        res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
-    } catch (error) {
-        res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
-    }
-});
-
-// ROTA PARA ACEITAR PEDIDO
-app.post('/api/orders/:id/accept', async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        // 1. Atualiza o status do pedido para 'Em Preparo'
-        const { data: updatedOrder, error } = await supabase
-            .from('orders')
-            .update({ status: 'Em Preparo' })
-            .eq('id', id)
-            .select('*, order_items(*)') // Pega o pedido completo com os itens
-            .single();
-
-        if (error) throw error;
-        if (!updatedOrder) return res.status(404).json({ error: 'Pedido não encontrado.' });
-
-        // 2. MOVE A LÓGICA DE NOTIFICAÇÃO PARA CÁ
-        /*/
-        if (updatedOrder.customer_phone) {
-            const itemsList = updatedOrder.order_items.map(item => `   - ${item.quantity}x ${item.item_name}`).join('\n');
-            const confirmationMsg = `Olá, ${updatedOrder.customer_name}! ✅\n\nConfirmamos o seu pedido *#${updatedOrder.id}*! Ele já está na nossa cozinha.\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nVamos te atualizando por aqui! 🍕`;
-            await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
-        }
-        */
-        res.status(200).json({ message: 'Pedido aceito com sucesso!', data: updatedOrder });
-
-    } catch (error) {
-        console.error(`Erro ao aceitar o pedido #${id}:`, error);
-        res.status(500).json({ error: `Erro ao aceitar o pedido #${id}.` });
     }
 });
 
 // --- ROTAS DE ESTOQUE: INGREDIENTES ---
 app.get('/api/ingredients', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('ingredients').select('*').order('name');
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar ingredientes.' }); }
-});
-app.post('/api/ingredients', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('ingredients').insert([req.body]).select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar ingrediente.' }); }
-});
-app.put('/api/ingredients/:id', async (req, res) => {
-    const { id } = req.params;
     try {
-        const { data, error } = await supabase.from('ingredients').update(req.body).eq('id', id).select().single();
+        const { data, error } = await supabase.from('ingredients').select('*').order('name');
         if (error) throw error;
         res.status(200).json(data);
-    } catch (error) { res.status(500).json({ error: 'Erro ao atualizar ingrediente.' }); }
-});
-app.delete('/api/ingredients/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const { error } = await supabase.from('ingredients').delete().eq('id', id);
-        if (error) {
-            if (error.code === '23503') {
-                return res.status(409).json({ error: 'Não é possível apagar este ingrediente, pois ele está a ser utilizado numa ou mais pizzas. Remova-o primeiro das receitas.' });
-            }
-            return res.status(400).json({ error: error.message });
-        }
-        res.status(204).send();
-    } catch (error) {
-        console.error('Erro inesperado ao apagar ingrediente:', error);
-        res.status(500).json({ error: 'Ocorreu um erro inesperado no servidor.' });
-    }
-});
-
-// --- ROTAS DE ESTOQUE: INGREDIENTES ---
-app.get('/api/ingredients', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('ingredients').select('*').order('name');
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar ingredientes.' }); }
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar ingredientes.' }); }
 });
 app.post('/api/ingredients', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('ingredients').insert([req.body]).select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar ingrediente.' }); }
+    try {
+        const { data, error } = await supabase.from('ingredients').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar ingrediente.' }); }
 });
 app.put('/api/ingredients/:id', async (req, res) => {
     const { id } = req.params;
@@ -558,18 +433,18 @@ app.delete('/api/ingredients/:id', async (req, res) => {
 
 // --- ROTAS DE ESTOQUE: BEBIDAS ---
 app.get('/api/drinks', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('drinks').select('*').order('name');
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar bebidas.' }); }
+    try {
+        const { data, error } = await supabase.from('drinks').select('*').order('name');
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar bebidas.' }); }
 });
 app.post('/api/drinks', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('drinks').insert([req.body]).select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar bebida.' }); }
+    try {
+        const { data, error } = await supabase.from('drinks').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar bebida.' }); }
 });
 app.put('/api/drinks/:id', async (req, res) => {
     const { id } = req.params;
@@ -648,80 +523,106 @@ app.post('/api/cashflow', async (req, res) => {
         res.status(201).json(data);
     } catch (error) { res.status(500).json({ error: 'Erro ao adicionar transação.' }); }
 });
+app.put('/api/cashflow/:id', async (req, res) => {
+    const { id } = req.params;
+    const { description, amount } = req.body;
+    if (!description || !amount) {
+        return res.status(400).json({ error: 'Descrição e valor são obrigatórios.' });
+    }
+    try {
+        const { data, error } = await supabase.from('cash_flow').update({ description, amount }).eq('id', id).select().single();
+        if (error) throw error;
+        res.status(200).json({ message: 'Transação atualizada com sucesso!', data });
+    } catch (err) {
+        console.error(`Erro ao atualizar transação #${id}:`, err);
+        res.status(500).json({ error: 'Erro interno ao atualizar a transação.' });
+    }
+});
+app.delete('/api/cashflow/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { error } = await supabase.from('cash_flow').delete().eq('id', id);
+        if (error) throw error;
+        res.status(204).send();
+    } catch (err) {
+        console.error(`Erro ao apagar transação #${id}:`, err);
+        res.status(500).json({ error: 'Erro interno ao apagar a transação.' });
+    }
+});
 
 // --- ROTA DE RELATÓRIOS ---
 app.get('/api/reports', async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    let query = supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
-    if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
-    if (endDate) {
-      const endOfDay = new Date(endDate);
-      endOfDay.setDate(endOfDay.getDate() + 1);
-      query = query.lt('created_at', endOfDay.toISOString());
+    try {
+        const { startDate, endDate } = req.query;
+        let query = supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
+        if (startDate) query = query.gte('created_at', new Date(startDate).toISOString());
+        if (endDate) {
+            const endOfDay = new Date(endDate);
+            endOfDay.setDate(endOfDay.getDate() + 1);
+            query = query.lt('created_at', endOfDay.toISOString());
+        }
+        const { data: allOrdersInPeriod, error: ordersError } = await query;
+        if (ordersError) throw ordersError;
+        const finalizedOrders = allOrdersInPeriod.filter(order => order.status === 'Finalizado');
+        const totalRevenue = finalizedOrders.reduce((acc, order) => acc + order.final_price, 0);
+        const totalFinalizedOrders = finalizedOrders.length;
+        const finalizedOrderIds = finalizedOrders.map(order => order.id);
+        let bestSellers = [];
+        if (finalizedOrderIds.length > 0) {
+            const { data: items, error: itemsError } = await supabase.from('order_items').select('item_name, quantity').in('order_id', finalizedOrderIds);
+            if (itemsError) throw itemsError;
+            const productCounts = items.reduce((acc, item) => {
+                acc[item.item_name] = (acc[item.item_name] || 0) + item.quantity;
+                return acc;
+            }, {});
+            bestSellers = Object.entries(productCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+        }
+        res.status(200).json({
+            totalRevenue,
+            totalOrders: totalFinalizedOrders,
+            bestSellers,
+            orders: allOrdersInPeriod
+        });
+    } catch (error) {
+        console.error('Erro ao gerar relatório:', error);
+        res.status(500).json({ error: 'Erro ao gerar relatório.' });
     }
-    const { data: allOrdersInPeriod, error: ordersError } = await query;
-    if (ordersError) throw ordersError;
-    const finalizedOrders = allOrdersInPeriod.filter(order => order.status === 'Finalizado');
-    const totalRevenue = finalizedOrders.reduce((acc, order) => acc + order.final_price, 0);
-    const totalFinalizedOrders = finalizedOrders.length;
-    const finalizedOrderIds = finalizedOrders.map(order => order.id);
-    let bestSellers = [];
-    if (finalizedOrderIds.length > 0) {
-        const { data: items, error: itemsError } = await supabase.from('order_items').select('item_name, quantity').in('order_id', finalizedOrderIds);
-        if (itemsError) throw itemsError;
-        const productCounts = items.reduce((acc, item) => {
-            acc[item.item_name] = (acc[item.item_name] || 0) + item.quantity;
-            return acc;
-        }, {});
-        bestSellers = Object.entries(productCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
-    }
-    res.status(200).json({
-      totalRevenue,
-      totalOrders: totalFinalizedOrders,
-      bestSellers,
-      orders: allOrdersInPeriod
-    });
-  } catch (error) {
-    console.error('Erro ao gerar relatório:', error);
-    res.status(500).json({ error: 'Erro ao gerar relatório.' });
-  }
 });
 
 // --- ROTAS DE CARDÁPIO (PIZZAS) ---
 app.get('/api/pizzas', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('pizzas').select(`*, pizza_ingredients (ingredient_id)`).order('name');
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar as pizzas.' }); }
+    try {
+        const { data, error } = await supabase.from('pizzas').select(`*, pizza_ingredients (ingredient_id)`).order('name');
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar as pizzas.' }); }
 });
 app.post('/api/pizzas', async (req, res) => {
-  const { ingredient_ids, ...pizzaData } = req.body;
-  try {
-    const { data: newPizza, error: pizzaError } = await supabase.from('pizzas').insert(pizzaData).select().single();
-    if (pizzaError) throw pizzaError;
-    if (ingredient_ids && ingredient_ids.length > 0) {
-      const ingredientsToInsert = ingredient_ids.map((id) => ({ pizza_id: newPizza.id, ingredient_id: id }));
-      const { error: ingredientsError } = await supabase.from('pizza_ingredients').insert(ingredientsToInsert);
-      if (ingredientsError) throw ingredientsError;
-    }
-    res.status(201).json(newPizza);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar a pizza.' }); }
+    const { ingredient_ids, ...pizzaData } = req.body;
+    try {
+        const { data: newPizza, error: pizzaError } = await supabase.from('pizzas').insert(pizzaData).select().single();
+        if (pizzaError) throw pizzaError;
+        if (ingredient_ids && ingredient_ids.length > 0) {
+            const ingredientsToInsert = ingredient_ids.map((id) => ({ pizza_id: newPizza.id, ingredient_id: id }));
+            const { error: ingredientsError } = await supabase.from('pizza_ingredients').insert(ingredientsToInsert);
+            if (ingredientsError) throw ingredientsError;
+        }
+        res.status(201).json(newPizza);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar a pizza.' }); }
 });
 app.put('/api/pizzas/:id', async (req, res) => {
-  const { id } = req.params;
-  const { ingredient_ids, ...pizzaData } = req.body;
-  try {
-    const { data: updatedPizza, error: pizzaError } = await supabase.from('pizzas').update(pizzaData).eq('id', id).select().single();
-    if (pizzaError) throw pizzaError;
-    await supabase.from('pizza_ingredients').delete().eq('pizza_id', id);
-    if (ingredient_ids && ingredient_ids.length > 0) {
-      const ingredientsToInsert = ingredient_ids.map((ing_id) => ({ pizza_id: id, ingredient_id: ing_id }));
-      await supabase.from('pizza_ingredients').insert(ingredientsToInsert);
-    }
-    res.status(200).json(updatedPizza);
-  } catch (error) { res.status(500).json({ error: 'Erro ao atualizar a pizza.' }); }
+    const { id } = req.params;
+    const { ingredient_ids, ...pizzaData } = req.body;
+    try {
+        const { data: updatedPizza, error: pizzaError } = await supabase.from('pizzas').update(pizzaData).eq('id', id).select().single();
+        if (pizzaError) throw pizzaError;
+        await supabase.from('pizza_ingredients').delete().eq('pizza_id', id);
+        if (ingredient_ids && ingredient_ids.length > 0) {
+            const ingredientsToInsert = ingredient_ids.map((ing_id) => ({ pizza_id: id, ingredient_id: ing_id }));
+            await supabase.from('pizza_ingredients').insert(ingredientsToInsert);
+        }
+        res.status(200).json(updatedPizza);
+    } catch (error) { res.status(500).json({ error: 'Erro ao atualizar a pizza.' }); }
 });
 app.delete('/api/pizzas/:id', async (req, res) => {
     const { id } = req.params;
@@ -734,19 +635,19 @@ app.delete('/api/pizzas/:id', async (req, res) => {
 
 // --- ROTAS DE ADICIONAIS (EXTRAS) ---
 app.get('/api/extras', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('extras').select(`id, price, is_available, ingredients (id, name)`);
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar os adicionais.' }); }
+    try {
+        const { data, error } = await supabase.from('extras').select(`id, price, is_available, ingredients (id, name)`);
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar os adicionais.' }); }
 });
 app.post('/api/extras', async (req, res) => {
-  const { ingredient_id, price, name } = req.body;
-  try {
-    const { data, error } = await supabase.from('extras').insert([{ ingredient_id, price, name, is_available: true }]).select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar o adicional.' }); }
+    const { ingredient_id, price, name } = req.body;
+    try {
+        const { data, error } = await supabase.from('extras').insert([{ ingredient_id, price, name, is_available: true }]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar o adicional.' }); }
 });
 app.put('/api/extras/:id', async (req, res) => {
     const { id } = req.params;
@@ -768,18 +669,18 @@ app.delete('/api/extras/:id', async (req, res) => {
 
 // --- ROTAS DE TAXAS DE ENTREGA ---
 app.get('/api/delivery-fees', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('delivery_fees').select('*').order('neighborhood_name');
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar taxas de entrega.' }); }
+    try {
+        const { data, error } = await supabase.from('delivery_fees').select('*').order('neighborhood_name');
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar taxas de entrega.' }); }
 });
 app.post('/api/delivery-fees', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('delivery_fees').insert([req.body]).select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar taxa de entrega.' }); }
+    try {
+        const { data, error } = await supabase.from('delivery_fees').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar taxa de entrega.' }); }
 });
 app.put('/api/delivery-fees/:id', async (req, res) => {
     const { id } = req.params;
@@ -800,18 +701,18 @@ app.delete('/api/delivery-fees/:id', async (req, res) => {
 
 // --- ROTAS DE CUPÕES DE DESCONTO ---
 app.get('/api/coupons', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar cupões.' }); }
+    try {
+        const { data, error } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar cupões.' }); }
 });
 app.post('/api/coupons', async (req, res) => {
-  try {
-    const { data, error } = await supabase.from('coupons').insert([req.body]).select().single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao adicionar cupão.' }); }
+    try {
+        const { data, error } = await supabase.from('coupons').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar cupão.' }); }
 });
 app.put('/api/coupons/:id', async (req, res) => {
     const { id } = req.params;
@@ -830,168 +731,62 @@ app.delete('/api/coupons/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Erro ao apagar cupão.' }); }
 });
 
-app.get('/api/coupons/validate/:code', async (req, res) => {
-  const { code } = req.params;
-  
-  if (!code) {
-    return res.status(400).json({ error: 'O código do cupom é obrigatório.' });
-  }
-
-  try {
-    const { data: coupon, error } = await supabase
-      .from('coupons')
-      .select('*')
-      .eq('code', code.toUpperCase())
-      .single();
-
-    if (error || !coupon) {
-      return res.status(404).json({ error: 'Cupom inválido ou não encontrado.' });
+app.post('/api/coupons/validate', async (req, res) => {
+    const { code } = req.body;
+    if (!code) {
+        return res.status(400).json({ error: 'O código do cupom é obrigatório.' });
     }
-
-    if (!coupon.is_active) {
-      return res.status(400).json({ error: 'Este cupom não está mais ativo.' });
+    try {
+        const { data: coupon, error } = await supabase.from('coupons').select('*').eq('code', code.toUpperCase()).single();
+        if (error || !coupon) {
+            return res.status(404).json({ error: 'Cupom inválido ou não encontrado.' });
+        }
+        if (!coupon.is_active) {
+            return res.status(400).json({ error: 'Este cupom não está mais ativo.' });
+        }
+        res.status(200).json(coupon);
+    } catch (err) {
+        console.error('Erro ao validar cupom:', err);
+        res.status(500).json({ error: 'Erro interno ao validar o cupom.' });
     }
-
-    res.status(200).json(coupon);
-
-  } catch (err) {
-    console.error('Erro ao validar cupom:', err);
-    res.status(500).json({ error: 'Erro interno ao validar o cupom.' });
-  }
 });
 
 // --- ROTAS DE HORÁRIO DE FUNCIONAMENTO ---
 app.get('/api/operating-hours', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('operating_hours')
-      .select('*')
-      .order('day_of_week', { ascending: true });
-    if (error) throw error;
-    res.status(200).json(data);
-  } catch (error) { res.status(500).json({ error: 'Erro ao buscar horário de funcionamento.' }); }
+    try {
+        const { data, error } = await supabase.from('operating_hours').select('*').order('day_of_week', { ascending: true });
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar horário de funcionamento.' }); }
 });
 app.put('/api/operating-hours/:day', async (req, res) => {
     const { day } = req.params;
     const { is_open, open_time, close_time } = req.body;
     try {
-        const { data, error } = await supabase
-            .from('operating_hours')
-            .update({ is_open, open_time, close_time })
-            .eq('day_of_week', day)
-            .select()
-            .single();
+        const { data, error } = await supabase.from('operating_hours').update({ is_open, open_time, close_time }).eq('day_of_week', day).select().single();
         if (error) throw error;
         res.status(200).json(data);
     } catch (error) { res.status(500).json({ error: 'Erro ao atualizar horário.' }); }
 });
 
-// [NOVO] Rota para cancelar um pedido
-app.post('/api/orders/:id/cancel', async (req, res) => {
-    const { id } = req.params;
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .update({ status: 'Cancelado' })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-
-      res.status(200).json({ message: 'Pedido cancelado com sucesso!', data });
-    } catch (error) {
-      res.status(500).json({ error: `Erro ao cancelar o pedido #${id}.` });
-    }
-});
-
-app.get('/api/orders/:id/finalize', async (req, res) => {
-    const { id } = req.params;
-    try {
-        await supabase.from('orders').update({ status: 'Finalizado' }).eq('id', id);
-        res.send('<h1>Pedido finalizado com sucesso! Obrigado!</h1>');
-    } catch (error) {
-        res.status(500).send('<h1>Erro ao finalizar o pedido.</h1>');
-    }
-});
-
 // --- [NOVO] ROTA DE CLIENTES ---
-// Adicione esta rota ao seu backend/index.js
-
 app.post('/api/customers', async (req, res) => {
-  const { name, phone } = req.body;
-
-  if (!name || !phone) {
-    return res.status(400).json({ error: 'Nome e telefone são obrigatórios.' });
-  }
-
-  // Limpa o número de telefone para guardar um formato consistente
-  const sanitizedPhone = phone.replace(/\D/g, '');
-
-  try {
-    // A função "upsert" tenta atualizar se o telefone já existir,
-    // ou insere um novo registo se não existir.
-    const { data, error } = await supabase
-      .from('customers')
-      .upsert(
-        { name: name, phone: sanitizedPhone },
-        { onConflict: 'phone' } // A coluna 'phone' é usada para detetar conflitos
-      )
-      .select()
-      .single();
-
-    if (error) throw error;
-    
-    res.status(200).json({ message: 'Cliente salvo com sucesso!', data });
-  } catch (err) {
-    console.error('Erro ao salvar cliente:', err);
-    res.status(500).json({ error: 'Erro interno ao salvar o cliente.' });
-  }
-});
-
-// --- [NOVO] ROTA PARA ATUALIZAR UMA TRANSAÇÃO ---
-app.put('/api/cashflow/:id', async (req, res) => {
-    const { id } = req.params;
-    const { description, amount } = req.body; // Apenas permite a atualização da descrição e do valor
-
-    if (!description || !amount) {
-        return res.status(400).json({ error: 'Descrição e valor são obrigatórios.' });
+    const { name, phone } = req.body;
+    if (!name || !phone) {
+        return res.status(400).json({ error: 'Nome e telefone são obrigatórios.' });
     }
-
+    const sanitizedPhone = phone.replace(/\D/g, '');
     try {
-        const { data, error } = await supabase
-            .from('cash_flow')
-            .update({ description, amount })
-            .eq('id', id)
-            .select()
-            .single();
-
+        const { data, error } = await supabase.from('customers').upsert({ name: name, phone: sanitizedPhone }, { onConflict: 'phone' }).select().single();
         if (error) throw error;
-        res.status(200).json({ message: 'Transação atualizada com sucesso!', data });
+        res.status(200).json({ message: 'Cliente salvo com sucesso!', data });
     } catch (err) {
-        console.error(`Erro ao atualizar transação #${id}:`, err);
-        res.status(500).json({ error: 'Erro interno ao atualizar a transação.' });
-    }
-});
-
-// --- [NOVO] ROTA PARA APAGAR UMA TRANSAÇÃO ---
-app.delete('/api/cashflow/:id', async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        const { error } = await supabase
-            .from('cash_flow')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
-        res.status(204).send(); // 204 No Content indica sucesso sem corpo de resposta
-    } catch (err) {
-        console.error(`Erro ao apagar transação #${id}:`, err);
-        res.status(500).json({ error: 'Erro interno ao apagar a transação.' });
+        console.error('Erro ao salvar cliente:', err);
+        res.status(500).json({ error: 'Erro interno ao salvar o cliente.' });
     }
 });
 
 // --- INICIALIZAÇÃO ---
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });

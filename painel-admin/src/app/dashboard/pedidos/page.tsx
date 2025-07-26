@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Bell, BellOff, ChevronDown, ChevronUp, Phone } from 'lucide-react';
 
@@ -15,7 +15,7 @@ type Order = {
   final_price: number;
   order_type: string;
   payment_method: string;
-  address: string | null; // Adicionado para o endereço
+  address: string | null;
   created_at: string;
   order_items: OrderItem[];
   observations: string | null;
@@ -61,7 +61,7 @@ export default function PedidosPage() {
 
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -99,10 +99,7 @@ export default function PedidosPage() {
     fetchData();
   }, [fetchData]);
 
-  // --- [ATUALIZADO] LÓGICA DE IMPRESSÃO COM ENDEREÇO ---
   const formatOrderForPrinting = (order: Order): string => {
-      // --- Parte 1: Monta a lista de itens ---
-      // Esta parte continua igual, pois já era eficiente.
       const itemsHtml = (order.order_items || []).map(item => {
           const itemTotal = (item.quantity * item.price_per_item).toFixed(2);
           let extrasHtml = '';
@@ -120,125 +117,35 @@ export default function PedidosPage() {
               </tr>`;
       }).join('');
 
-      // --- Parte 2: A Mágica do Novo Layout (HTML e CSS) ---
       return `
           <html>
           <head>
               <title>Pedido #${order.id}</title>
               <style>
-                  /* --- Configurações Gerais e de Impressão --- */
-                  @page { 
-                      size: 58mm auto; 
-                      margin: 3mm; 
-                  }
-                  body { 
-                      font-family: 'Consolas', 'Menlo', 'Courier New', monospace; 
-                      font-size: 11px; 
-                      color: #000;
-                      width: 52mm; /* Largura útil dentro da margem */
-                  }
-
-                  /* --- Estrutura e Estilos --- */
-                  .receipt-header {
-                      text-align: center;
-                      margin-bottom: 8px;
-                  }
-                  .receipt-header h1 {
-                      font-size: 18px;
-                      font-weight: bold;
-                      margin: 0;
-                  }
-                  .order-id {
-                      text-align: center;
-                      font-size: 20px;
-                      font-weight: bold;
-                      border-top: 1px dashed #000;
-                      border-bottom: 1px dashed #000;
-                      padding: 4px 0;
-                      margin-bottom: 8px;
-                  }
-                  .section {
-                      margin-top: 10px;
-                  }
-                  .section-title {
-                      font-weight: bold;
-                      border-bottom: 1px solid #000;
-                      padding-bottom: 2px;
-                      margin-bottom: 5px;
-                  }
-                  .info-table, .items-table {
-                      width: 100%;
-                      border-collapse: collapse;
-                  }
-                  .info-table td {
-                      padding: 1.5px 0;
-                  }
-                  .info-table td:last-child {
-                      text-align: right;
-                  }
-
-                  .items-table .item-qty {
-                      text-align: left; 
-                      vertical-align: top;
-                      width: 15%;
-                  }
-                  .items-table .item-name {
-                      padding: 0 4px;
-                  }
-                  .items-table .item-price {
-                      text-align: right; 
-                      vertical-align: top;
-                      width: 30%;
-                  }
-                  .items-table .extras-list {
-                      font-size: 10px;
-                      color: #333;
-                      padding-left: 4px;
-                  }
-
-                  /* --- Seção de Destaque para Observações --- */
-                  .observations-box {
-                      margin-top: 10px;
-                      padding: 6px;
-                      border: 1px solid #000;
-                      background-color: #f0f0f0;
-                  }
-                  .observations-box .section-title {
-                      border: none;
-                      margin-bottom: 4px;
-                  }
-                  .observations-box p {
-                      font-size: 12px;
-                      font-weight: bold;
-                      margin: 0;
-                      white-space: pre-wrap; /* Mantém as quebras de linha */
-                  }
-
-                  .total-line {
-                      margin-top: 10px;
-                      padding-top: 5px;
-                      border-top: 1px dashed #000;
-                      display: flex;
-                      justify-content: space-between;
-                      font-size: 16px;
-                      font-weight: bold;
-                  }
-                  .footer {
-                      margin-top: 15px;
-                      text-align: center;
-                      font-size: 10px;
-                  }
+                  @page { size: 58mm auto; margin: 3mm; }
+                  body { font-family: 'Consolas', 'Menlo', 'Courier New', monospace; font-size: 11px; color: #000; width: 52mm; }
+                  .receipt-header { text-align: center; margin-bottom: 8px; }
+                  .receipt-header h1 { font-size: 18px; font-weight: bold; margin: 0; }
+                  .order-id { text-align: center; font-size: 20px; font-weight: bold; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; margin-bottom: 8px; }
+                  .section { margin-top: 10px; }
+                  .section-title { font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 5px; }
+                  .info-table, .items-table { width: 100%; border-collapse: collapse; }
+                  .info-table td { padding: 1.5px 0; }
+                  .info-table td:last-child { text-align: right; }
+                  .items-table .item-qty { text-align: left; vertical-align: top; width: 15%; }
+                  .items-table .item-name { padding: 0 4px; }
+                  .items-table .item-price { text-align: right; vertical-align: top; width: 30%; }
+                  .items-table .extras-list { font-size: 10px; color: #333; padding-left: 4px; }
+                  .observations-box { margin-top: 10px; padding: 6px; border: 1px solid #000; background-color: #f0f0f0; }
+                  .observations-box .section-title { border: none; margin-bottom: 4px; }
+                  .observations-box p { font-size: 12px; font-weight: bold; margin: 0; white-space: pre-wrap; }
+                  .total-line { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; }
+                  .footer { margin-top: 15px; text-align: center; font-size: 10px; }
               </style>
           </head>
           <body>
-              <div class="receipt-header">
-                  <h1>FORNERIA 360</h1>
-              </div>
-
-              <div class="order-id">
-                  PEDIDO #${order.id}
-              </div>
-
+              <div class="receipt-header"><h1>FORNERIA 360</h1></div>
+              <div class="order-id">PEDIDO #${order.id}</div>
               <div class="section">
                   <table class="info-table">
                       <tr><td>Data:</td><td>${new Date(order.created_at).toLocaleString('pt-BR')}</td></tr>
@@ -248,36 +155,14 @@ export default function PedidosPage() {
                       <tr><td>Pagamento:</td><td><strong>${order.payment_method.toUpperCase()}</strong></td></tr>
                   </table>
               </div>
-
               <div class="section">
                   <div class="section-title">Itens do Pedido</div>
-                  <table class="items-table">
-                      <tbody>${itemsHtml}</tbody>
-                  </table>
+                  <table class="items-table"><tbody>${itemsHtml}</tbody></table>
               </div>
-              
-              ${(order.order_type === 'delivery' && order.address) ? `
-                  <div class="section">
-                      <div class="section-title">Endereço de Entrega</div>
-                      <p style="font-size: 12px; font-weight: bold;">${order.address}</p>
-                  </div>
-              ` : ''}
-
-              ${(order.observations && order.observations.trim() !== '') ? `
-                  <div class="observations-box">
-                      <div class="section-title">!!! OBSERVAÇÕES !!!</div>
-                      <p>${order.observations}</p>
-                  </div>
-              ` : ''}
-
-              <div class="total-line">
-                  <span>Total:</span>
-                  <span>R$ ${order.final_price.toFixed(2).replace('.', ',')}</span>
-              </div>
-
-              <div class="footer">
-                  Obrigado pela preferência!
-              </div>
+              ${(order.order_type === 'delivery' && order.address) ? `<div class="section"><div class="section-title">Endereço de Entrega</div><p style="font-size: 12px; font-weight: bold;">${order.address}</p></div>` : ''}
+              ${(order.observations && order.observations.trim() !== '') ? `<div class="observations-box"><div class="section-title">!!! OBSERVAÇÕES !!!</div><p>${order.observations}</p></div>` : ''}
+              <div class="total-line"><span>Total:</span><span>R$ ${order.final_price.toFixed(2).replace('.', ',')}</span></div>
+              <div class="footer">Obrigado pela preferência!</div>
           </body>
           </html>
       `;
@@ -286,7 +171,6 @@ export default function PedidosPage() {
   const handlePrint = useCallback((order: Order) => {
     const receiptHtml = formatOrderForPrinting(order);
     const printWindow = window.open('', '_blank');
-
     if (printWindow) {
       printWindow.document.write(receiptHtml);
       printWindow.document.close();
@@ -298,7 +182,7 @@ export default function PedidosPage() {
     } else {
       alert('Por favor, permita pop-ups para imprimir o pedido.');
     }
-  }, []);
+  }, [formatOrderForPrinting]);
 
   useEffect(() => {
     const handleRealtimeChange = (payload: any) => {
@@ -322,11 +206,7 @@ export default function PedidosPage() {
 
     const channel = supabase
       .channel('realtime-orders-page')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        handleRealtimeChange
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleRealtimeChange)
       .subscribe();
 
     return () => {
@@ -334,15 +214,18 @@ export default function PedidosPage() {
     };
   }, [supabase]);
 
-
+  // --- FUNÇÃO CENTRALIZADA PARA ATUALIZAR STATUS ---
   const updateOrderStatus = async (orderId: number, newStatus: string, motoboyId: string | null = null) => {
     try {
       const body = motoboyId ? { newStatus, motoboyId } : { newStatus };
-      await fetch(`${API_URL}/api/orders/${orderId}`, {
+      const response = await fetch(`${API_URL}/api/orders/${orderId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!response.ok) {
+        throw new Error(`Falha ao atualizar o status do pedido #${orderId}`);
+      }
     } catch (err) {
       console.error("Falha ao atualizar status:", err);
       fetchData();
@@ -350,30 +233,18 @@ export default function PedidosPage() {
   };
 
   const handleAcceptOrder = async (order: Order) => {
-    try {
-        const response = await fetch(`${API_URL}/api/orders/${order.id}/accept`, {
-            method: 'POST',
-        });
-        if (!response.ok) {
-            throw new Error('Falha ao aceitar o pedido.');
-        }
-
-        // Após aceitar, o pedido deve ser impresso
-        handlePrint(order);
-
-        // O Realtime vai atualizar o status na tela, não precisa remover daqui.
-        // Apenas atualizamos o estado local para refletir a mudança de status.
-        setOrders(current => current.map(o => 
-            o.id === order.id ? { ...o, status: 'Em Preparo' } : o
-        ));
-
-    } catch (err: any) {
-        alert(`Erro ao aceitar pedido: ${err.message}`);
-    }
+    await updateOrderStatus(order.id, 'Em Preparo');
+    handlePrint(order);
   };
   
+  const handleCancelOrder = async (orderId: number) => {
+    if (window.confirm(`Tem a certeza que quer cancelar o Pedido #${orderId}?`)) {
+      await updateOrderStatus(orderId, 'Cancelado');
+    }
+  };
+
   const handleUpdateStatus = (order: Order, newStatus: string) => {
-    if (newStatus === 'Saiu para Entrega' && order.order_type && order.order_type.toLowerCase() === 'delivery') {
+    if (newStatus === 'Saiu para Entrega' && order.order_type === 'delivery') {
       setMotoboyModal({ isOpen: true, order: order });
       return;
     }
@@ -382,22 +253,10 @@ export default function PedidosPage() {
 
   const handleAssignMotoboy = (motoboyId: string) => {
     if (!motoboyModal.order) return;
-    setMotoboyModal({ isOpen: false, order: null });
     updateOrderStatus(motoboyModal.order.id, 'Saiu para Entrega', motoboyId);
+    setMotoboyModal({ isOpen: false, order: null });
   };
-
-  const handleCancelOrder = async (orderId: number) => {
-    if (window.confirm(`Tem a certeza que quer cancelar o Pedido #${orderId}? Esta ação não pode ser desfeita.`)) {
-      try {
-        const response = await fetch(`${API_URL}/api/orders/${orderId}/cancel`, { method: 'POST' });
-        if (!response.ok) throw new Error('Falha ao cancelar o pedido.');
-        alert('Pedido cancelado com sucesso.');
-      } catch (err: any) {
-        alert(`Erro ao cancelar pedido: ${err.message}`);
-      }
-    }
-  };
-
+  
   const handleAddExtraToItem = (itemIndex: number, extraId: string) => {
     const extra = extras.find(e => e.id === extraId);
     if (!extra) return;
@@ -480,7 +339,6 @@ export default function PedidosPage() {
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Pedido #{order.id}</h2>
-                {/* --- [ATUALIZADO] Exibição do Nome e Telefone --- */}
                 <div className="text-sm text-gray-500 mt-1">
                   <p>{order.customer_name || 'Cliente'}</p>
                   {order.customer_phone && (
@@ -537,48 +395,41 @@ export default function PedidosPage() {
             )}
 
             <div className="mt-4 flex flex-wrap gap-2 items-center">
-              {/* --- LÓGICA DE BOTÕES CONDICIONAL --- */}
-
               {order.status === 'Aguardando Confirmação' ? (
-                  <>
-                      {/* Botão Aceitar */}
-                      <button 
-                          onClick={() => handleAcceptOrder(order)} 
-                          className="flex-grow px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-bold text-sm"
-                      >
-                          Aceitar Pedido
-                      </button>
-
-                      {/* Botão Recusar (reutiliza a função de cancelar) */}
-                      <button 
-                          onClick={() => handleCancelOrder(order.id)} 
-                          className="flex-grow px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-sm"
-                      >
-                          Recusar
-                      </button>
-                  </>
+                <>
+                  <button 
+                    onClick={() => handleAcceptOrder(order)} 
+                    className="flex-grow px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-bold text-sm"
+                  >
+                    Aceitar Pedido
+                  </button>
+                  <button 
+                    onClick={() => handleCancelOrder(order.id)} 
+                    className="flex-grow px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-sm"
+                  >
+                    Recusar
+                  </button>
+                </>
               ) : (
-                  <>
-                      {/* Botões do fluxo normal para pedidos já aceitos */}
-                      <button onClick={() => updateOrderStatus(order.id, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>
-                      {order.order_type === 'delivery' ? (
-                          <button onClick={() => handleUpdateStatus(order, 'Saiu para Entrega')} className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">Saiu para Entrega</button>
-                      ) : (
-                          <button onClick={() => updateOrderStatus(order.id, 'Pronto para Retirada')} className="px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm">Pronto para Retirada</button>
-                      )}
-                      <button onClick={() => updateOrderStatus(order.id, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar</button>
-                  </>
+                <>
+                  <button onClick={() => handleUpdateStatus(order, 'Em Preparo')} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">Em Preparo</button>
+                  {order.order_type === 'delivery' ? (
+                    <button onClick={() => handleUpdateStatus(order, 'Saiu para Entrega')} className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm">Saiu para Entrega</button>
+                  ) : (
+                    <button onClick={() => handleUpdateStatus(order, 'Pronto para Retirada')} className="px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 text-sm">Pronto para Retirada</button>
+                  )}
+                  <button onClick={() => handleUpdateStatus(order, 'Finalizado')} className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm">Finalizar</button>
+                </>
               )}
 
-              {/* Botões que aparecem sempre */}
               <button onClick={() => handlePrint(order)} className="px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm">Reimprimir</button>
               <button onClick={() => handleCancelOrder(order.id)} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Cancelar</button>
 
               <button
-                  onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
-                  className="ml-auto p-1 text-gray-500 hover:bg-gray-100 rounded-full"
+                onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                className="ml-auto p-1 text-gray-500 hover:bg-gray-100 rounded-full"
               >
-                  {expandedOrderId === order.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                {expandedOrderId === order.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
               </button>
             </div>
           </div>
