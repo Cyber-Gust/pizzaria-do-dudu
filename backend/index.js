@@ -61,6 +61,36 @@ const sendWhatsappMessage = async (to, body) => {
     }
 };
 
+const sendWhatsappTemplateMessage = async (to, templateSid, variables) => {
+    try {
+        let cleanNumber = String(to).replace(/\D/g, '');
+        if (cleanNumber.startsWith('55')) {
+            cleanNumber = cleanNumber.substring(2);
+        }
+        if (cleanNumber.length === 11 && cleanNumber.charAt(2) === '9') {
+            const ddd = cleanNumber.substring(0, 2);
+            const numberWithoutNine = cleanNumber.substring(3);
+            cleanNumber = ddd + numberWithoutNine;
+        }
+        const finalNumber = `whatsapp:+55${cleanNumber}`;
+
+        // A estrutura da mensagem de template é diferente.
+        // Usamos 'contentSid' e 'contentVariables' em vez de 'body'.
+        const messageOptions = {
+            contentSid: templateSid,
+            contentVariables: JSON.stringify(variables),
+            from: twilioWhatsappNumber,
+            to: finalNumber
+        };
+
+        console.log(`Tentando enviar TEMPLATE ${templateSid} para ${finalNumber}`);
+        await twilioClient.messages.create(messageOptions);
+        console.log(`Template ${templateSid} enviado com sucesso para ${finalNumber}`);
+
+    } catch (error) {
+        console.error(`Erro ao enviar template ${templateSid} para ${to}:`, error.message);
+    }
+};
 
 // --- [ATUALIZADO] WEBHOOK DO WHATSAPP PARA RECEBER MENSAGENS DA TWILIO ---
 app.post('/api/whatsapp', (req, res) => {
@@ -285,17 +315,36 @@ app.post('/api/orders/:id', async (req, res) => {
 
         if (newStatus === 'Em Preparo' && updatedOrder.customer_phone) {
             const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
-            const confirmationMsg = `Olá, ${updatedOrder.customer_name}! Seu pedido *#${updatedOrder.id}* foi confirmado! ✅\n\nNossa cozinha já está a todo vapor preparando sua pizza. Logo logo te avisamos das próximas etapas!\n\n*Resumo do Pedido:*\n${itemsList}\n\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Pagamento:* ${updatedOrder.payment_method}\n\nQualquer dúvida, estamos por aqui! 👨‍🍳`;
-            await sendWhatsappMessage(updatedOrder.customer_phone, confirmationMsg);
+            await sendWhatsappTemplateMessage(
+                updatedOrder.customer_phone,
+                'HHXb862a844d4eec105b4599954955b87db', // Substitua pelo SID do template 'confirmacao_preparo'
+                {
+                    '1': updatedOrder.customer_name,
+                    '2': updatedOrder.id,
+                    '3': itemsList
+                }
+            );
         }
         if (newStatus === 'Pronto para Retirada' && updatedOrder.customer_phone) {
-            const msg = `Boas notícias, ${updatedOrder.customer_name}! 🎉\n\nSeu pedido *#${updatedOrder.id}* já está quentinho e pronto te esperando aqui na pizzaria!`;
-            await sendWhatsappMessage(updatedOrder.customer_phone, msg);
+            await sendWhatsappTemplateMessage(
+                updatedOrder.customer_phone,
+                'HX976f2c60e3c42d8c0c3300f9a726999c', // Substitua pelo SID do template 'pronto_para_retirada'
+                {
+                    '1': updatedOrder.customer_name,
+                    '2': updatedOrder.id
+                }
+            );
         }
         if (newStatus === 'Saiu para Entrega') {
             if (updatedOrder.customer_phone) {
-                const customerMsg = `Fique de olho! 👀\n\nSeu pedido *#${updatedOrder.id}* já saiu para entrega com nosso motoboy e está a caminho do seu endereço! 🛵`;
-                await sendWhatsappMessage(updatedOrder.customer_phone, customerMsg);
+                await sendWhatsappTemplateMessage(
+                    updatedOrder.customer_phone,
+                    'HX54b87a9b3d1edbdf621e26c6f1f2b66a', // Substitua pelo SID do template 'saiu_para_entrega_cliente'
+                    {
+                        '1': updatedOrder.customer_name,
+                        '2': updatedOrder.id
+                    }
+                );
             }
             if (motoboyId) {
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
@@ -314,22 +363,40 @@ app.post('/api/orders/:id', async (req, res) => {
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
                     
-                    const message = `*Nova Entrega: Pedido #${updatedOrder.id}* 🛵\n\n*Cliente:* ${updatedOrder.customer_name}\n*Telefone:* ${updatedOrder.customer_phone}\n\n*Endereço:* ${cleanAddress}\n*Link do Mapa:* ${mapsLink}\n\n---\n*Itens:*\n${itemsList}\n---\n\n*Pagamento na Entrega:*\n*Total:* R$ ${updatedOrder.final_price.toFixed(2)}\n*Forma:* ${updatedOrder.payment_method}\n\n---\n👇 *AO ENTREGAR, CLIQUE AQUI:* 👇\n${finalizeLink}`;
-                    await sendWhatsappMessage(motoboy.whatsapp_number, message);
+                    await sendWhatsappTemplateMessage(
+                        motoboy.whatsapp_number,
+                        'HXbae18f6ab37cc84be22657bde99aa7f9', // Substitua pelo SID do template 'nova_entrega_motoboy'
+                        {
+                            '1': updatedOrder.id,
+                            '2': updatedOrder.customer_name,
+                            '3': updatedOrder.customer_phone,
+                            '4': cleanAddress,
+                            '5': mapsLink,
+                            '6': itemsList,
+                            '7': updatedOrder.final_price.toFixed(2),
+                            '8': updatedOrder.payment_method,
+                            '9': finalizeLink
+                        }
+                    );
                 }
             }
         }
         if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
             await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: updatedOrder.final_price, order_id: updatedOrder.id }]);
+            
             setTimeout(async () => {
                 try {
-                    const googleReviewLink = "https://g.page/r/CWzyrg4rErr4EBM/review"; 
-                    const feedbackMsg = `Olá, ${updatedOrder.customer_name}! ${getGreetingByTime()}!\n\nEspero que tenha gostado da sua pizza! 🍕\n\nSua opinião é muito importante para nós. Se puder, deixe uma avaliação pra gente no Google? Leva só um minutinho!\n\n${googleReviewLink}\n\nMuito obrigado e até a próxima! 😊`;
-                    await sendWhatsappMessage(updatedOrder.customer_phone, feedbackMsg);
+                    await sendWhatsappTemplateMessage(
+                        updatedOrder.customer_phone,
+                        'HX4f53242e7c369f2ad722095c41cd0f46', // Substitua pelo SID do template 'pedido_feedback'
+                        {
+                            '1': updatedOrder.customer_name
+                        }
+                    );
                 } catch (e) {
-                    console.error(`Erro ao enviar mensagem de feedback para o pedido #${id}:`, e);
+                    console.error(`Erro ao agendar mensagem de feedback para o pedido #${id}:`, e);
                 }
-            }, 7200000);
+            }, 7200000); // 2 horas
         }
         res.status(200).json({ message: `Pedido #${id} atualizado para ${newStatus}`, data: updatedOrder });
     } catch (error) { 
@@ -811,10 +878,16 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
         .single();
       if (error) throw error;
       
-      if (data.customer_phone) {
-          const msg = `Olá, ${data.customer_name}. Gostaríamos de informar que infelizmente o seu pedido *#${data.id}* foi cancelado"`;
-          await sendWhatsappMessage(data.customer_phone, msg);
-      }
+      if (newStatus === 'Cancelado' && updatedOrder.customer_phone) {
+            await sendWhatsappTemplateMessage(
+                updatedOrder.customer_phone,
+                'HX14009d44439ba3f7981ea7ff7a02ce70', // Substitua pelo SID do template 'pedido_cancelado'
+                {
+                    '1': updatedOrder.customer_name,
+                    '2': updatedOrder.id
+                }
+            );
+        }
 
       res.status(200).json({ message: 'Pedido cancelado com sucesso!', data });
     } catch (error) {
