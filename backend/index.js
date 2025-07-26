@@ -317,7 +317,7 @@ app.post('/api/orders/:id', async (req, res) => {
             const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
             await sendWhatsappTemplateMessage(
                 updatedOrder.customer_phone,
-                'HHXb862a844d4eec105b4599954955b87db', // Substitua pelo SID do template 'confirmacao_preparo'
+                'HXb862a844d4eec105b4599954955b87db', // Substitua pelo SID do template 'confirmacao_preparo'
                 {
                     '1': updatedOrder.customer_name,
                     '2': String(updatedOrder.id),
@@ -353,35 +353,26 @@ app.post('/api/orders/:id', async (req, res) => {
             if (motoboyId) {
                 const { data: motoboy } = await supabase.from('motoboys').select('name, whatsapp_number').eq('id', motoboyId).single();
                 if (motoboy && motoboy.whatsapp_number) {
-                    const itemsList = Array.isArray(updatedOrder.order_items) 
-                        ? updatedOrder.order_items.map(item => {
-                            let extrasText = '';
-                            if (item.selected_extras && item.selected_extras.length > 0) {
-                                extrasText = ` (Adicionais: ${item.selected_extras.map(e => e.name).join(', ')})`;
-                            }
-                            return `  - ${item.quantity}x ${item.item_name}${extrasText}`;
-                        }).join('\n')
-                        : 'Itens não detalhados.';
-
+                    const itemsList = updatedOrder.order_items.map(item => `  - ${item.quantity}x ${item.item_name}`).join('\n');
                     const cleanAddress = (updatedOrder.address || '').split('(Taxa:')[0].trim();
                     const mapsLink = `https://maps.google.com/?q=${encodeURIComponent(cleanAddress)}`;
                     const finalizeLink = `https://pizzaria-do-dudu.onrender.com/api/orders/${updatedOrder.id}/finalize`;
-                    
-                    await sendWhatsappTemplateMessage(
-                        motoboy.whatsapp_number,
-                        'HXbae18f6ab37cc84be22657bde99aa7f9', // Substitua pelo SID do template 'nova_entrega_motoboy'
-                        {
-                            '1': String(updatedOrder.id),
-                            '2': updatedOrder.customer_name,
-                            '3': updatedOrder.customer_phone,
-                            '4': cleanAddress,
-                            '5': mapsLink,
-                            '6': itemsList,
-                            '7': updatedOrder.final_price.toFixed(2),
-                            '8': updatedOrder.payment_method,
-                            '9': finalizeLink
-                        }
-                    );
+
+                    // --- CORREÇÃO APLICADA AQUI ---
+                    const templateSid = 'HXbae18f6ab37cc84be22657bde99aa7f9'; // Substitua pelo SID
+                    const variables = {
+                        '1': String(updatedOrder.id),
+                        '2': updatedOrder.customer_name,
+                        '3': updatedOrder.customer_phone,
+                        '4': cleanAddress,
+                        '5': mapsLink,
+                        '6': itemsList,
+                        '7': updatedOrder.final_price.toFixed(2),
+                        '8': updatedOrder.payment_method,
+                        '9': finalizeLink
+                    };
+                    console.log(`DEBUG: Enviando template para MOTOBOY ${templateSid} com variáveis:`, JSON.stringify(variables, null, 2));
+                    await sendWhatsappTemplateMessage(motoboy.whatsapp_number, templateSid, variables);
                 }
             }
         }
