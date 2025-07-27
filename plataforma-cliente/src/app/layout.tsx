@@ -1,9 +1,11 @@
+// src/app/layout.tsx
+
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getPizzeriaStatus } from "@/lib/api"; // Importar
+// 1. A busca de dados no servidor foi removida daqui
 import { StatusProvider } from "@/components/StatusProvider"; // Importar
 
 const roboto = Roboto({
@@ -16,20 +18,19 @@ export const metadata: Metadata = {
   description: "Peça online a melhor pizza da cidade!",
 };
 
-export default async function RootLayout({
+// 2. A função não precisa mais ser 'async'
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Buscamos o status aqui, no componente de servidor mais alto
-  const pizzeriaStatus = await getPizzeriaStatus();
-
   return (
     <html lang="pt-BR">
       <body className={`${roboto.className} flex flex-col min-h-screen`}>
-        <StatusProvider status={pizzeriaStatus}>
+        {/* 3. O StatusProvider agora envolve a aplicação sem receber props.
+            Ele mesmo buscará o status inicial e ouvirá por atualizações. */}
+        <StatusProvider>
           <Header />
-          {/* A classe 'flex-grow' faz o conteúdo principal crescer e empurrar o rodapé para baixo */}
           <main className="flex-grow">{children}</main>
           <Footer />
         </StatusProvider>
