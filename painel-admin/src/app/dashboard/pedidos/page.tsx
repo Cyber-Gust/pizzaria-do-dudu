@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { ChevronDown, ChevronUp, Phone } from 'lucide-react';
+import { ChevronDown, ChevronUp, Phone, MapPin } from 'lucide-react';
 
 // Tipagens
 type ExtraItem = { id: string; name: string; price: number };
@@ -386,6 +386,14 @@ export default function PedidosPage() {
                       <Phone size={12} />
                       {order.customer_phone}
                     </a>
+                  )}
+                  {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
+                  {/* Mostra o endereço se for um pedido de entrega */}
+                  {order.order_type === 'delivery' && order.address && (
+                    <div className="flex items-start gap-1.5 text-gray-700 pt-1">
+                      <MapPin size={14} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                      <p className="font-medium">{order.address.split('(Taxa:')[0].trim()}</p>
+                    </div>
                   )}
                 </div>
               </div>
