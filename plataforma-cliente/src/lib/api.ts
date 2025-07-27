@@ -18,13 +18,21 @@ export interface Extra {
   id: string;
   price: number;
   is_available: boolean;
-  // O nome do ingrediente virá aninhado
   ingredients: {
     id: string;
     name: string;
   }
 }
 
+export interface Dessert {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+  is_available: boolean;
+  item_type: 'dessert';
+}
 
 export interface OperatingHour {
   day_of_week: number;
@@ -38,16 +46,6 @@ export interface DeliveryFee {
   id: string;
   neighborhood_name: string;
   fee_amount: number;
-}
-
-// Interface para o item que será enviado ao criar um pedido
-export interface OrderItemPayload {
-  item_id: string;
-  item_type: 'pizza' | 'drink';
-  item_name: string;
-  quantity: number;
-  price_per_item: number;
-  extras?: { id: string; name: string; price: number }[]; // Adicionais
 }
 
 export interface PizzeriaStatus {
@@ -76,13 +74,15 @@ export interface Drink {
   image_url: string;
 }
 
-// Interface para o item que será enviado ao criar um pedido
+// CORREÇÃO: Interface unificada para itens do pedido
 export interface OrderItemPayload {
-  item_id: string;
-  item_type: 'pizza' | 'drink';
+  item_id: string | null; // Nulo para itens customizados como meio a meio
+  // CORREÇÃO: Adicionado 'dessert' como um tipo de item válido
+  item_type: 'pizza' | 'drink' | 'dessert';
   item_name: string;
   quantity: number;
   price_per_item: number;
+  extras?: { id: string; name: string; price: number }[]; // Adicionais são opcionais
 }
 
 // Interface para os dados completos do pedido a ser enviado
@@ -96,10 +96,7 @@ export interface OrderPayload {
   items: OrderItemPayload[];
   discount_amount?: number;
   delivery_fee?: number;
-  
 }
-
-// Adicione esta interface e função ao seu arquivo src/lib/api.ts
 
 export interface Coupon {
   id: string;
@@ -113,22 +110,16 @@ export interface Coupon {
 // --- FUNÇÕES DA API: AS AÇÕES QUE NOSSO FRONTEND PODE FAZER ---
 // ===================================================================
 
-/**
- * Busca o status atual da pizzaria (aberta/fechada, tempos de espera).
- */
 export const getPizzeriaStatus = async (): Promise<PizzeriaStatus | null> => {
   try {
-    // Usamos a API 'fetch' nativa para aproveitar o cache do Next.js/Vercel
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/status`, {
       next: {
-        revalidate: 60, // Diz à Vercel para revalidar (buscar novamente) estes dados a cada 60 segundos
+        revalidate: 60,
       },
     });
-
     if (!response.ok) {
       throw new Error('Falha ao buscar o status da pizzaria');
     }
-
     return response.json();
   } catch (error) {
     console.error("Erro ao buscar status da pizzaria:", error);
@@ -136,44 +127,43 @@ export const getPizzeriaStatus = async (): Promise<PizzeriaStatus | null> => {
   }
 };
 
-/**
- * Busca a lista completa de pizzas do cardápio.
- */
 export const getPizzas = async (): Promise<Pizza[]> => {
   try {
     const response = await apiClient.get('/pizzas');
     return response.data;
   } catch (error) {
     console.error("Erro ao buscar pizzas:", error);
-    return []; // Retorna um array vazio em caso de erro
+    return [];
   }
 };
 
-/**
- * Busca a lista completa de bebidas do cardápio.
- */
 export const getDrinks = async (): Promise<Drink[]> => {
   try {
     const response = await apiClient.get('/drinks');
     return response.data;
   } catch (error) {
     console.error("Erro ao buscar bebidas:", error);
-    return []; // Retorna um array vazio em caso de erro
+    return [];
   }
 };
 
-/**
- * Envia um novo pedido para a API.
- * @param orderData - Os dados do pedido, formatados de acordo com a interface OrderPayload.
- */
+// CORREÇÃO: Adicionada a função para buscar sobremesas
+export const getDesserts = async (): Promise<Dessert[]> => {
+  try {
+    const response = await apiClient.get('/desserts');
+    return response.data;
+  } catch (error) {
+    console.error("Erro ao buscar sobremesas:", error);
+    return [];
+  }
+};
+
 export const createOrder = async (orderData: OrderPayload) => {
   try {
     const response = await apiClient.post('/orders', orderData);
     return response.data;
   } catch (error) {
     console.error("Erro ao criar o pedido:", error);
-    // Lança o erro para que o componente que chamou a função saiba que falhou
-    // e possa exibir uma mensagem para o usuário.
     throw error;
   }
 };
@@ -188,9 +178,6 @@ export const getExtras = async (): Promise<Extra[]> => {
   }
 };
 
-/**
- * Busca a lista de taxas de entrega por bairro.
- */
 export const getDeliveryFees = async (): Promise<DeliveryFee[]> => {
   try {
     const response = await apiClient.get('/delivery-fees');
@@ -202,7 +189,6 @@ export const getDeliveryFees = async (): Promise<DeliveryFee[]> => {
 };
 
 export const validateCoupon = async (code: string): Promise<Coupon> => {
-  // A função fará uma requisição GET para a nova rota que criamos.
   const response = await apiClient.get(`/coupons/validate/${code}`);
   return response.data;
 };
@@ -213,22 +199,15 @@ export const getOperatingHours = async (): Promise<OperatingHour[]> => {
     return response.data;
   } catch (error) {
     console.error("Erro ao buscar horário de funcionamento:", error);
-    return []; // Retorna um array vazio em caso de erro
+    return [];
   }
 };
 
-/**
- * Salva ou atualiza os dados de um cliente no banco de dados.
- * @param name - O nome do cliente.
- * @param phone - O telefone do cliente.
- */
 export const saveCustomer = async (name: string, phone: string) => {
   try {
     await apiClient.post('/customers', { name, phone });
     console.log("Cliente salvo com sucesso no banco de dados.");
   } catch (error) {
-    // Não mostramos um alerta ao utilizador, pois esta é uma operação de fundo.
-    // Apenas registamos o erro na consola.
     console.error("Erro ao salvar dados do cliente:", error);
   }
 };

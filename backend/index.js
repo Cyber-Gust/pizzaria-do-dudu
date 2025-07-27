@@ -37,6 +37,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // --- FUNÇÕES AUXILIARES DE MENSAGERIA ---
 const sendWhatsappMessage = async (to, body) => {
+    if (!to || String(to).trim().length < 10) {
+        console.log(`[AVISO] Tentativa de enviar mensagem para um destinatário inválido/vazio: "${to}". Mensagem não enviada.`);
+        return; // Impede a execução se não houver número.
+    }
     try {
         let cleanNumber = String(to).replace(/\D/g, '');
         if (cleanNumber.startsWith('55')) {
@@ -62,6 +66,10 @@ const sendWhatsappMessage = async (to, body) => {
 };
 
 const sendWhatsappTemplateMessage = async (to, templateSid, variables) => {
+    if (!to || String(to).trim().length < 10) {
+        console.log(`[AVISO] Tentativa de enviar template ${templateSid} para um destinatário inválido/vazio: "${to}". Mensagem não enviada.`);
+        return; // Impede a execução se não houver número.
+    }
     try {
         let cleanNumber = String(to).replace(/\D/g, '');
         if (cleanNumber.startsWith('55')) {
@@ -347,17 +355,15 @@ app.post('/api/orders/:id', async (req, res) => {
         if (newStatus === 'Finalizado' && updatedOrder.customer_phone) {
             const pizzeriaIncome = updatedOrder.final_price - (updatedOrder.delivery_fee || 0);
             await supabase.from('cash_flow').insert([{ description: `Venda do Pedido #${updatedOrder.id}`, type: 'income', amount: pizzeriaIncome, order_id: updatedOrder.id }]);
-            setTimeout(async () => {
-                try {
+            if (updatedOrder.customer_phone) {
+                setTimeout(async () => {
                     await sendWhatsappTemplateMessage(
                         updatedOrder.customer_phone,
                         'HX4f53242e7c369f2ad722095c41cd0f46', // SID para 'pedido_feedback'
                         { '1': updatedOrder.customer_name }
                     );
-                } catch (e) {
-                    console.error(`Erro ao agendar mensagem de feedback para o pedido #${id}:`, e);
-                }
-            }, 7200000); // 2 horas
+                }, 7200000); // 2 horas
+            }
         }
         
         if (newStatus === 'Cancelado' && updatedOrder.customer_phone) {
@@ -493,6 +499,38 @@ app.delete('/api/drinks/:id', async (req, res) => {
         if (error) throw error;
         res.status(204).send();
     } catch (error) { res.status(500).json({ error: 'Erro ao apagar bebida.' }); }
+});
+
+// --- [NOVO] ROTAS DE SOBREMESAS ---
+app.get('/api/desserts', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('desserts').select('*').order('name');
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao buscar sobremesas.' }); }
+});
+app.post('/api/desserts', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('desserts').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao adicionar sobremesa.' }); }
+});
+app.put('/api/desserts/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data, error } = await supabase.from('desserts').update(req.body).eq('id', id).select().single();
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) { res.status(500).json({ error: 'Erro ao atualizar sobremesa.' }); }
+});
+app.delete('/api/desserts/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { error } = await supabase.from('desserts').delete().eq('id', id);
+        if (error) throw error;
+        res.status(204).send();
+    } catch (error) { res.status(500).json({ error: 'Erro ao apagar sobremesa.' }); }
 });
 
 // --- ROTAS DE MOTOBOYS ---

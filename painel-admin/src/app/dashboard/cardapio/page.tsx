@@ -23,9 +23,17 @@ type Drink = {
   price: number;
   image_url: string;
 };
+type Dessert = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+};
 
 export default function CardapioPage() {
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
+  const [desserts, setDesserts] = useState<Dessert[]>([]);
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,29 +41,33 @@ export default function CardapioPage() {
   
   const [isPizzaModalOpen, setIsPizzaModalOpen] = useState(false);
   const [isDrinkModalOpen, setIsDrinkModalOpen] = useState(false);
-  
+  const [isDessertModalOpen, setIsDessertModalOpen] = useState(false);
+
   const [currentPizza, setCurrentPizza] = useState<Partial<Pizza> & { selectedIngredients?: string[] }>({});
   const [currentDrink, setCurrentDrink] = useState<Partial<Drink>>({});
-  
+  const [currentDessert, setCurrentDessert] = useState<Partial<Dessert>>({});
+
   const [uploading, setUploading] = useState(false);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pizzaria-do-dudu.onrender.com';
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [pizzasRes, drinksRes, ingredientsRes] = await Promise.all([
+      const [pizzasRes, drinksRes, ingredientsRes, dessertsRes] = await Promise.all([
         fetch(`${API_URL}/api/pizzas`),
         fetch(`${API_URL}/api/drinks`),
         fetch(`${API_URL}/api/ingredients`),
+        fetch(`${API_URL}/api/desserts`),
       ]);
       if (!pizzasRes.ok || !drinksRes.ok || !ingredientsRes.ok) {
         throw new Error('Falha ao comunicar com a API para carregar o cardápio.');
       }
       setPizzas(await pizzasRes.json());
       setDrinks(await drinksRes.json());
+      setDesserts(await dessertsRes.json());
       setIngredients(await ingredientsRes.json());
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -85,7 +97,12 @@ export default function CardapioPage() {
     setIsDrinkModalOpen(true);
   };
 
-  const handlePhotoUpload = async (file: File, type: 'pizza' | 'drink') => {
+  const handleOpenDessertModal = (item: Dessert | null = null) => {
+    setCurrentDessert(item ? { ...item } : { name: '', description: '', price: 0, image_url: '' });
+    setIsDessertModalOpen(true);
+  };
+
+  const handlePhotoUpload = async (file: File, type: 'pizza' | 'drink' | 'dessert') => {
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -96,8 +113,10 @@ export default function CardapioPage() {
       const { data } = supabase.storage.from('produtos').getPublicUrl(fileName);
       if (type === 'pizza') {
         setCurrentPizza(prev => ({ ...prev, image_url: data.publicUrl }));
-      } else {
+      } else if (type === 'drink') {
         setCurrentDrink(prev => ({ ...prev, image_url: data.publicUrl }));
+      } else { // --- 5. LÓGICA DE UPLOAD PARA SOBREMESA ---
+        setCurrentDessert(prev => ({ ...prev, image_url: data.publicUrl }));
       }
     } catch (err: unknown) { // [CORRIGIDO]
       console.error(err);
@@ -132,6 +151,15 @@ export default function CardapioPage() {
     fetchData();
     setIsDrinkModalOpen(false);
   };
+
+  const handleSaveDessert = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = `${API_URL}/api/desserts${currentDessert.id ? `/${currentDessert.id}` : ''}`;
+    const method = currentDessert.id ? 'PUT' : 'POST';
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentDessert) });
+    fetchData();
+    setIsDessertModalOpen(false);
+  };
   
   const handleDeletePizza = async (id: string) => {
       if(window.confirm("Tem a certeza que quer apagar esta pizza?")) {
@@ -145,6 +173,12 @@ export default function CardapioPage() {
           fetchData();
       }
   }
+  const handleDeleteDessert = async (id: string) => {
+    if(window.confirm("Tem a certeza que quer apagar esta sobremesa?")) {
+        await fetch(`${API_URL}/api/desserts/${id}`, { method: 'DELETE' });
+        fetchData();
+    }
+  }
 
   if (loading) return <p>A carregar cardápio...</p>;
   if (error) return <p className="text-red-500 bg-red-100 p-4 rounded-lg">Erro: {error}</p>;
@@ -156,6 +190,7 @@ export default function CardapioPage() {
         <div className="flex space-x-2">
             <button onClick={() => handleOpenPizzaModal()} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">+ Adicionar Pizza</button>
             <button onClick={() => handleOpenDrinkModal()} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">+ Adicionar Bebida</button>
+            <button onClick={() => handleOpenDessertModal()} className="px-4 py-2 bg-yellow-500 text-white font-semibold rounded-lg hover:bg-yellow-600">+ Adicionar Sobremesa</button>
         </div>
       </div>
 
@@ -191,6 +226,26 @@ export default function CardapioPage() {
                 <div className="mt-4 flex justify-end space-x-2">
                   <button onClick={() => handleOpenDrinkModal(drink)} className="text-sm text-blue-600">Editar</button>
                   <button onClick={() => handleDeleteDrink(drink.id)} className="text-sm text-red-600">Apagar</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Sobremesas</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {desserts.map(dessert => (
+            <div key={dessert.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <Image src={dessert.image_url || 'https://placehold.co/600x600?text=Sobremesa'} alt={dessert.name} width={600} height={600} className="w-full h-48 object-cover" />
+              <div className="p-4">
+                <h3 className="text-xl font-bold">{dessert.name}</h3>
+                <p className="text-gray-600 text-sm mb-2">{dessert.description}</p>
+                <p className="text-lg font-semibold text-green-600">R$ {dessert.price.toFixed(2)}</p>
+                <div className="mt-4 flex justify-end space-x-2">
+                  <button onClick={() => handleOpenDessertModal(dessert)} className="text-sm text-blue-600">Editar</button>
+                  <button onClick={() => handleDeleteDessert(dessert.id)} className="text-sm text-red-600">Apagar</button>
                 </div>
               </div>
             </div>
@@ -252,6 +307,27 @@ export default function CardapioPage() {
                 <div className="flex justify-end space-x-3 pt-4">
                     <button type="button" onClick={() => setIsDrinkModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
                     <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded" disabled={uploading}>Salvar Bebida</button>
+                </div>
+            </form>
+        </div>
+      )}
+
+      {isDessertModalOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4">
+            <form onSubmit={handleSaveDessert} className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
+                <h2 className="text-2xl font-bold mb-4">{currentDessert.id ? 'Editar' : 'Adicionar'} Sobremesa</h2>
+                <input type="text" placeholder="Nome da Sobremesa" value={currentDessert.name || ''} onChange={e => setCurrentDessert({...currentDessert, name: e.target.value})} className="w-full p-2 border rounded" required />
+                <textarea placeholder="Descrição" value={currentDessert.description || ''} onChange={e => setCurrentDessert({...currentDessert, description: e.target.value})} className="w-full p-2 border rounded" />
+                <input type="number" placeholder="Preço" step="0.01" value={currentDessert.price || ''} onChange={e => setCurrentDessert({...currentDessert, price: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded" required />
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Foto da Sobremesa</label>
+                    <input type="file" accept="image/*" onChange={e => e.target.files && handlePhotoUpload(e.target.files[0], 'dessert')} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                    {uploading && <p>A carregar foto...</p>}
+                    {currentDessert.image_url && <Image src={currentDessert.image_url} alt="Preview" width={128} height={128} className="mt-2 w-32 h-32 object-cover rounded" />}
+                </div>
+                <div className="flex justify-end space-x-3 pt-4">
+                    <button type="button" onClick={() => setIsDessertModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded" disabled={uploading}>Salvar Sobremesa</button>
                 </div>
             </form>
         </div>

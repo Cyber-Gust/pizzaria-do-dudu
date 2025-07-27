@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Adicionado useEffect para a lógica de login
 import { useCartStore } from '@/store/cartStore';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,8 +16,16 @@ export default function CartPage() {
   const router = useRouter();
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  // --- CORREÇÃO AQUI ---
-  // O subtotal agora soma o preço do produto + o preço de todos os extras.
+  
+  // Efeito para redirecionar automaticamente após o login
+  useEffect(() => {
+    // Se o modal não estiver aberto E o usuário estiver autenticado,
+    // significa que o login foi bem-sucedido.
+    if (!isLoginModalOpen && isAuthenticated && items.length > 0) {
+      router.push('/checkout');
+    }
+  }, [isLoginModalOpen, isAuthenticated, items.length, router]);
+
   const subtotal = items.reduce((acc, item) => {
     const extrasTotal = item.extras.reduce((extraAcc, extra) => extraAcc + extra.price, 0);
     const itemTotal = (item.product.price + extrasTotal) * item.quantity;
@@ -26,11 +34,9 @@ export default function CartPage() {
 
   const handleCheckout = () => {
     if (!isAuthenticated) {
-      // Em vez de mostrar um toast, agora abrimos o modal de login
       setIsLoginModalOpen(true);
-      return; // Interrompe a execução para não tentar redirecionar
+      return;
     }
-    // Se o usuário já estiver logado, ele segue para o checkout normalmente
     router.push('/checkout');
   };
 
@@ -39,7 +45,7 @@ export default function CartPage() {
       <div className="container mx-auto text-center px-4 py-16">
         <h1 className="text-2xl font-bold mb-4">Seu carrinho está vazio</h1>
         <p className="text-gray-600 mb-8">
-          Adicione algumas pizzas deliciosas para começar!
+          Adicione algumas delícias para começar!
         </p>
         <Link href="/cardapio" className="bg-brand-red text-white font-bold py-3 px-6 rounded-md hover:bg-brand-red-dark">
           Ver Cardápio
@@ -52,7 +58,7 @@ export default function CartPage() {
       <LoginModal 
         isOpen={isLoginModalOpen} 
         onClose={() => setIsLoginModalOpen(false)} 
-     />
+      />
 
     <div className="container mx-auto px-4 py-8">
       <Toaster position="top-center" />
@@ -60,14 +66,18 @@ export default function CartPage() {
 
       <div className="flex flex-col gap-4">
         {items.map((item) => (
-          // --- CORREÇÃO AQUI ---
-          // A chave agora é o 'cartItemId', que é sempre único.
           <div key={item.cartItemId} className="flex items-start bg-white p-3 rounded-lg shadow-sm">
-            <Image src={item.product.image_url!} alt={item.product.name} width={80} height={80} className="rounded-md" />
+            {/* CORREÇÃO: Adicionado um fallback para a imagem */}
+            <Image 
+              src={item.product.image_url || 'https://placehold.co/80x80/EAB308/FFFFFF?text=Item'} 
+              alt={item.product.name} 
+              width={80} 
+              height={80} 
+              className="rounded-md object-cover" 
+            />
             
             <div className="ml-4 flex-grow">
               <p className="font-bold">{item.product.name}</p>
-              {/* Mostra os extras selecionados */}
               {item.extras.length > 0 && (
                 <div className="text-xs text-gray-500 mt-1">
                   {item.extras.map(extra => `+ ${extra.name}`).join(', ')}
@@ -78,13 +88,11 @@ export default function CartPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {/* --- CORREÇÃO AQUI --- */}
-              {/* As funções agora usam 'cartItemId' para identificar o item correto */}
-              <button onClick={() => decreaseQuantity(item.cartItemId)} className="p-1 rounded-full bg-gray-200">
+              <button onClick={() => decreaseQuantity(item.cartItemId)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300">
                 <Minus size={16} />
               </button>
-              <span className="font-bold">{item.quantity}</span>
-              <button onClick={() => increaseQuantity(item.cartItemId)} className="p-1 rounded-full bg-gray-200">
+              <span className="font-bold w-6 text-center">{item.quantity}</span>
+              <button onClick={() => increaseQuantity(item.cartItemId)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300">
                 <Plus size={16} />
               </button>
             </div>
@@ -109,8 +117,6 @@ export default function CartPage() {
           <span>Total (parcial)</span>
           <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subtotal)}</span>
         </div>
-        {/* --- CORREÇÃO AQUI --- */}
-        {/* O botão agora chama a função handleCheckout */}
         <button 
           onClick={handleCheckout}
           className="w-full mt-6 bg-green-500 text-white font-bold py-3 rounded-md hover:bg-green-600"
@@ -119,6 +125,6 @@ export default function CartPage() {
         </button>
       </div>
     </div>
-  </>  
+    </>   
   );
 }

@@ -149,7 +149,16 @@ export default function CheckoutPage() {
       delivery_fee: orderType === 'delivery' ? selectedFee : 0,
       observations: observations,
       items: items.map(item => {
-        const itemType = 'stock_quantity' in item.product ? 'drink' : 'pizza';
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Esta lógica agora identifica corretamente o tipo de cada item, incluindo sobremesas.
+        // Ela prioriza a propriedade 'item_type' que definimos em todos os produtos.
+        let itemType: 'pizza' | 'drink' | 'dessert' = 'pizza'; // Valor padrão
+        if ('item_type' in item.product && item.product.item_type) {
+            itemType = item.product.item_type;
+        } else if ('stock_quantity' in item.product) { // Lógica antiga como fallback
+            itemType = 'drink';
+        }
+
         const price = typeof item.product.price === 'number' ? item.product.price : parseFloat(item.product.price || '0');
 
         return {

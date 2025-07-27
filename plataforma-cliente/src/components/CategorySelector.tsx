@@ -1,11 +1,12 @@
 // src/components/CategorySelector.tsx
 import Link from 'next/link';
-import { Pizza, CupSoda } from 'lucide-react'; // Ícones para as categorias
+import { Pizza, CupSoda, IceCream } from 'lucide-react'; // Ícones para as categorias
 
+// CORREÇÃO: Adicionado o href para Sobremesas e ajustado o de Bebidas
 const categories = [
   { name: 'Pizzas', href: '/cardapio?categoria=pizzas', icon: Pizza },
-  { name: 'Bebidas', href: '/cardapio?categoria=bebidas', icon: CupSoda },
-  // Adicione outras categorias aqui se necessário
+  { name: 'Bebidas', href: '/cardapio?categoria=drinks', icon: CupSoda },
+  { name: 'Sobremesas', href: '/cardapio?categoria=desserts', icon: IceCream },
 ];
 
 const CategorySelector = () => {

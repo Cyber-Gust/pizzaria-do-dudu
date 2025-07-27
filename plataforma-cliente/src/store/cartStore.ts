@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Pizza, Drink } from '@/lib/api';
+import type { Pizza, Drink, Dessert } from '@/lib/api';
 
 // O tipo Product agora pode ser um produto normal ou um objeto customizado
-export type Product = Pizza | Drink | { [key: string]: any; type: 'half-and-half' };
+export type Product = Pizza | Drink | Dessert | { [key: string]: any; type: 'half-and-half' };
 
 export type SelectedExtra = {
   id: string;
