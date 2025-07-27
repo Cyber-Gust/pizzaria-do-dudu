@@ -1,24 +1,22 @@
-// plataforma-cliente/src/app/cardapio/page.tsx
+// src/app/cardapio/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-// 1. Importar tudo o que precisamos, incluindo Sobremesas
 import { Pizza, Drink, Dessert, getPizzas, getDrinks, getDesserts } from '@/lib/api';
-import { useCartStore } from '@/store/cartStore'; // Importar a store do carrinho
+import { useCartStore } from '@/store/cartStore';
+import { useStatus } from '@/components/StatusProvider';
 import PizzaCard from '@/components/PizzaCard';
 import DrinkCard from '@/components/DrinkCard';
 import HalfPizzaModal from '@/components/HalfPizzaModal';
 import Image from 'next/image';
-import { toast } from 'react-hot-toast'; // Para dar feedback ao usuário
+import { toast, Toaster } from 'react-hot-toast';
 
-// 2. Adicionar 'sobremesas' à nossa tipagem de categoria
 type Category = 'pizzas' | 'bebidas' | 'sobremesas';
 
 export default function CardapioPage() {
   const [activeCategory, setActiveCategory] = useState<Category>('pizzas');
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
   const [drinks, setDrinks] = useState<Drink[]>([]);
-  // 3. Adicionar estado para as sobremesas
   const [desserts, setDesserts] = useState<Dessert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isHalfPizzaModalOpen, setIsHalfPizzaModalOpen] = useState(false);
@@ -27,7 +25,6 @@ export default function CardapioPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // 4. Buscar os três tipos de produtos em paralelo
         const [pizzasData, drinksData, dessertsData] = await Promise.all([
           getPizzas(), 
           getDrinks(),
@@ -48,6 +45,7 @@ export default function CardapioPage() {
 
   return (
     <>
+      <Toaster position="bottom-center" />
       <HalfPizzaModal isOpen={isHalfPizzaModalOpen} onClose={() => setIsHalfPizzaModalOpen(false)} />
       
       <div className="container mx-auto px-4 py-12">
@@ -66,7 +64,6 @@ export default function CardapioPage() {
           >
             Bebidas
           </button>
-          {/* 5. Adicionar o botão/aba para Sobremesas */}
           <button
             onClick={() => setActiveCategory('sobremesas')}
             className={`px-6 py-3 font-semibold text-lg transition-colors ${activeCategory === 'sobremesas' ? 'border-b-4 border-brand-red text-brand-red' : 'text-gray-500'}`}
@@ -97,6 +94,7 @@ export default function CardapioPage() {
             )}
             
             {activeCategory === 'bebidas' && (
+              // Grade de bebidas
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {drinks.map((drink) => (
                   <DrinkCard key={drink.id} drink={drink} />
@@ -104,9 +102,10 @@ export default function CardapioPage() {
               </div>
             )}
 
-            {/* 6. Adicionar a seção para renderizar as sobremesas */}
             {activeCategory === 'sobremesas' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                // --- CORREÇÃO APLICADA AQUI ---
+                // A grade de sobremesas agora usa as mesmas classes da grade de bebidas
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {desserts.map((dessert) => (
                         <DessertCard key={dessert.id} dessert={dessert} />
                     ))}
@@ -119,29 +118,50 @@ export default function CardapioPage() {
   );
 }
 
-// 7. Componente DessertCard, pronto para ser usado
+// --- CORREÇÃO APLICADA AQUI ---
+// O DessertCard foi reestruturado para ser idêntico ao DrinkCard, garantindo o mesmo tamanho.
 const DessertCard = ({ dessert }: { dessert: Dessert }) => {
-    const { addItem } = useCartStore();
+    const addItem = useCartStore((state) => state.addItem);
+    const status = useStatus();
+
+    const canBeAdded = status?.is_open && dessert.is_available;
 
     const handleAddToCart = () => {
-        // Adicionamos a sobremesa ao carrinho. Como sobremesas não têm 'extras', passamos um array vazio.
+        if (!canBeAdded) return;
         addItem(dessert, []);
         toast.success(`${dessert.name} adicionado ao carrinho!`);
     };
 
+    const formattedPrice = new Intl.NumberFormat('pt-BR', {
+        style: 'currency', currency: 'BRL',
+    }).format(dessert.price);
+
     return (
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
-            <Image src={dessert.image_url} alt={dessert.name} width={400} height={300} className="w-full h-48 object-cover" />
-            <div className="p-4 flex flex-col flex-grow">
-                <h3 className="text-xl font-bold mb-2">{dessert.name}</h3>
-                <p className="text-gray-600 text-sm mb-4 flex-grow">{dessert.description}</p>
-                <div className="flex justify-between items-center mt-auto">
-                    <span className="text-lg font-bold text-brand-red">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dessert.price)}
-                    </span>
-                    <button 
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 relative">
+            {!status?.is_open && (
+                <div className="absolute inset-0 bg-black bg-opacity-60 z-10 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">LOJA FECHADA</span>
+                </div>
+            )}
+
+            <div className="relative w-full h-56">
+                <Image
+                    src={dessert.image_url || '/images/default-dessert.png'}
+                    alt={dessert.name}
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    style={{ objectFit: 'cover' }}
+                />
+            </div>
+            <div className="p-4 flex-grow flex flex-col">
+                <h3 className="text-lg font-bold mb-2 flex-grow">{dessert.name}</h3>
+                {/* A descrição foi removida da exibição para manter a altura consistente */}
+                <div className="flex justify-between items-center mt-4">
+                    <span className="text-xl font-bold text-brand-red">{formattedPrice}</span>
+                    <button
                         onClick={handleAddToCart}
-                        className="bg-green-500 text-white font-bold py-2 px-4 rounded-full hover:bg-green-600 transition-colors"
+                        disabled={!canBeAdded}
+                        className="bg-brand-red hover:bg-brand-red-dark text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                         Adicionar
                     </button>
