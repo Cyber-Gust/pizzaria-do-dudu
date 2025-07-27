@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react'; // Adicionado useEffect para a lógica de login
+import { useState } from 'react';
 import { useCartStore } from '@/store/cartStore';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,15 +16,6 @@ export default function CartPage() {
   const router = useRouter();
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  
-  // Efeito para redirecionar automaticamente após o login
-  useEffect(() => {
-    // Se o modal não estiver aberto E o usuário estiver autenticado,
-    // significa que o login foi bem-sucedido.
-    if (!isLoginModalOpen && isAuthenticated && items.length > 0) {
-      router.push('/checkout');
-    }
-  }, [isLoginModalOpen, isAuthenticated, items.length, router]);
 
   const subtotal = items.reduce((acc, item) => {
     const extrasTotal = item.extras.reduce((extraAcc, extra) => extraAcc + extra.price, 0);
@@ -57,7 +48,17 @@ export default function CartPage() {
     <>
       <LoginModal 
         isOpen={isLoginModalOpen} 
-        onClose={() => setIsLoginModalOpen(false)} 
+        onClose={() => {
+            setIsLoginModalOpen(false);
+            // Após fechar o modal, verificamos se o utilizador está agora autenticado.
+            // A store (Zustand) atualiza o estado 'isAuthenticated' globalmente após o login.
+            // Usamos um pequeno timeout para dar tempo à store para atualizar antes de verificar.
+            setTimeout(() => {
+                if (useUserStore.getState().isAuthenticated) {
+                    router.push('/checkout');
+                }
+            }, 100);
+        }} 
       />
 
     <div className="container mx-auto px-4 py-8">
@@ -67,7 +68,6 @@ export default function CartPage() {
       <div className="flex flex-col gap-4">
         {items.map((item) => (
           <div key={item.cartItemId} className="flex items-start bg-white p-3 rounded-lg shadow-sm">
-            {/* CORREÇÃO: Adicionado um fallback para a imagem */}
             <Image 
               src={item.product.image_url || 'https://placehold.co/80x80/EAB308/FFFFFF?text=Item'} 
               alt={item.product.name} 
