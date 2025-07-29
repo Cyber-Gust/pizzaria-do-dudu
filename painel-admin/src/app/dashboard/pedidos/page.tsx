@@ -168,6 +168,8 @@ export default function PedidosPage() {
               ${(order.order_type === 'delivery' && order.address) ? `<div class="section"><div class="section-title">Endereço de Entrega</div><p style="font-size: 12px; font-weight: bold;">${order.address}</p></div>` : ''}
               ${(order.observations && order.observations.trim() !== '') ? `<div class="observations-box"><div class="section-title">!!! OBSERVAÇÕES !!!</div><p>${order.observations}</p></div>` : ''}
               <div class="total-line"><span>Total:</span><span>R$ ${order.final_price.toFixed(2).replace('.', ',')}</span></div>
+              <div class="total-line"><span>Total:</span><span>.</span></div>
+              <div class="total-line"><span>Total:</span><span>.</span></div>
               <div class="footer">Obrigado pela preferência!</div>
           </body>
           </html>

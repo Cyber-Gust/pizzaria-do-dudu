@@ -1,4 +1,4 @@
-// src/app/cardapio/page.tsx
+// plataforma-cliente/src/app/cardapio/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -94,7 +94,6 @@ export default function CardapioPage() {
             )}
             
             {activeCategory === 'bebidas' && (
-              // Grade de bebidas
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {drinks.map((drink) => (
                   <DrinkCard key={drink.id} drink={drink} />
@@ -103,8 +102,6 @@ export default function CardapioPage() {
             )}
 
             {activeCategory === 'sobremesas' && (
-                // --- CORREÇÃO APLICADA AQUI ---
-                // A grade de sobremesas agora usa as mesmas classes da grade de bebidas
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {desserts.map((dessert) => (
                         <DessertCard key={dessert.id} dessert={dessert} />
@@ -118,13 +115,13 @@ export default function CardapioPage() {
   );
 }
 
-// --- CORREÇÃO APLICADA AQUI ---
-// O DessertCard foi reestruturado para ser idêntico ao DrinkCard, garantindo o mesmo tamanho.
+// Componente DessertCard com a lógica de status corrigida
 const DessertCard = ({ dessert }: { dessert: Dessert }) => {
     const addItem = useCartStore((state) => state.addItem);
-    const status = useStatus();
+    const { isLoading, status } = useStatus();
 
-    const canBeAdded = status?.is_open && dessert.is_available;
+    const isStoreClosed = !isLoading && status && !status.is_open;
+    const canBeAdded = !isLoading && status?.is_open && dessert.is_available;
 
     const handleAddToCart = () => {
         if (!canBeAdded) return;
@@ -138,7 +135,7 @@ const DessertCard = ({ dessert }: { dessert: Dessert }) => {
 
     return (
         <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 relative">
-            {!status?.is_open && (
+            {isStoreClosed && (
                 <div className="absolute inset-0 bg-black bg-opacity-60 z-10 flex items-center justify-center">
                     <span className="text-white font-bold text-lg">LOJA FECHADA</span>
                 </div>
@@ -155,15 +152,15 @@ const DessertCard = ({ dessert }: { dessert: Dessert }) => {
             </div>
             <div className="p-4 flex-grow flex flex-col">
                 <h3 className="text-lg font-bold mb-2 flex-grow">{dessert.name}</h3>
-                {/* A descrição foi removida da exibição para manter a altura consistente */}
-                <div className="flex justify-between items-center mt-4">
+                <p className="text-gray-600 text-sm mb-4">{dessert.description}</p>
+                <div className="flex justify-between items-center mt-auto">
                     <span className="text-xl font-bold text-brand-red">{formattedPrice}</span>
                     <button
                         onClick={handleAddToCart}
                         disabled={!canBeAdded}
                         className="bg-brand-red hover:bg-brand-red-dark text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
-                        Adicionar
+                        {isLoading ? 'Aguarde...' : 'Adicionar'}
                     </button>
                 </div>
             </div>
