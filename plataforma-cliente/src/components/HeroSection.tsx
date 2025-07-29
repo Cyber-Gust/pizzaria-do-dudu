@@ -7,18 +7,17 @@ import { Star, Clock, XCircle, User, LogIn, Edit, Info } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import LoginModal from './LoginModal';
 import InfoModal from './InfoModal';
-import { OperatingHour } from '@/lib/api'; // Importar a tipagem
+import { OperatingHour } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 
-// --- CORREÇÃO AQUI ---
-// Definimos que este componente receberá uma propriedade chamada 'operatingHours'
 interface HeroSectionProps {
   operatingHours: OperatingHour[];
 }
 
-// O componente agora aceita 'operatingHours' como um argumento
 const HeroSection = ({ operatingHours }: HeroSectionProps) => {
-  const status = useStatus();
+  // --- 1. CORREÇÃO APLICADA AQUI ---
+  // Agora obtemos o isLoading e o status do nosso hook.
+  const { isLoading, status } = useStatus();
   const { isAuthenticated, name } = useUserStore();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -42,7 +41,6 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
   return (
     <>
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
-      {/* Passamos os horários recebidos para o InfoModal */}
       <InfoModal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} operatingHours={operatingHours} />
       
       <section
@@ -67,7 +65,7 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-black bg-opacity-40 z-10">
-          <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center text-sm gap-4">           
+          <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center text-sm gap-4">          
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-400" fill="currentColor" />
@@ -94,14 +92,21 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
                 <Info size={16} />
               </button>
 
-              {status && (
+              {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
+              {/* Esta é a nova lógica de exibição que lida com o estado de carregamento. */}
+              {isLoading ? (
+                <div className="flex items-center gap-2 font-bold px-3 py-1 rounded-full bg-gray-500">
+                    <Clock size={16} />
+                    <span>A verificar...</span>
+                </div>
+              ) : status ? (
                 <div className={`flex items-center gap-2 font-bold px-3 py-1 rounded-full ${
                   status.is_open ? 'bg-green-500' : 'bg-red-600'
                 }`}>
                   {status.is_open ? <Clock size={16} /> : <XCircle size={16} />}
                   <span>{status.is_open ? 'Abertos' : 'Fechados'}</span>
                 </div>
-              )}
+              ) : null}
 
               {isMounted && (
                 isAuthenticated ? (

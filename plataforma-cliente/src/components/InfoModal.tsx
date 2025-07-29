@@ -11,7 +11,9 @@ interface InfoModalProps {
 }
 
 const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
-  const status = useStatus();
+  // --- 1. CORREÇÃO APLICADA AQUI ---
+  // Agora obtemos o isLoading e o status do nosso hook.
+  const { isLoading, status } = useStatus();
 
   if (!isOpen) return null;
 
@@ -42,17 +44,20 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
             </div>
           </div>
           
-          {status && (
-            <div>
-                <h3 className="font-semibold text-center mb-3 border-t pt-4">
-                    Tempo Estimado
-                </h3>
+          {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
+          {/* A lógica agora verifica se está a carregar ou se o status existe. */}
+          <div>
+              <h3 className="font-semibold text-center mb-3 border-t pt-4">
+                Tempo Estimado
+              </h3>
+              {isLoading ? (
+                <p className="text-center text-gray-500">A carregar tempos...</p>
+              ) : status ? (
                 <div className="flex justify-around text-sm">
                     <div className="flex items-center gap-2">
                         <Bike size={18} className="text-gray-700" />
                         <div>
                             <span className="block font-medium">Entrega</span>
-                            {/* --- ATUALIZAÇÃO AQUI --- */}
                             <span className="text-gray-600">{status.delivery_time_min}-{status.delivery_time_max} min</span>
                         </div>
                     </div>
@@ -60,13 +65,14 @@ const InfoModal = ({ isOpen, onClose, operatingHours }: InfoModalProps) => {
                         <Package size={18} className="text-gray-700" />
                         <div>
                             <span className="block font-medium">Retirada</span>
-                            {/* --- ATUALIZAÇÃO AQUI --- */}
                             <span className="text-gray-600">{status.pickup_time_min}-{status.pickup_time_max} min</span>
                         </div>
                     </div>
                 </div>
-            </div>
-          )}
+              ) : (
+                <p className="text-center text-gray-500">Indisponível no momento.</p>
+              )}
+          </div>
 
           <div>
             <h3 className="font-semibold text-center mb-3 border-t pt-4">

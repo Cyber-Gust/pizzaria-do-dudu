@@ -12,10 +12,14 @@ interface DessertCardProps {
 
 const DessertCard = ({ dessert }: DessertCardProps) => {
   const addItem = useCartStore((state) => state.addItem);
-  const status = useStatus();
+  // --- 1. CORREÇÃO APLICADA AQUI ---
+  const { isLoading, status } = useStatus();
+
+  // A loja só está "fechada" se não estiver a carregar E o status for 'is_open: false'.
+  const isStoreClosed = !isLoading && status && !status.is_open;
 
   // A sobremesa pode ser adicionada se a loja estiver aberta e o item estiver disponível.
-  const canBeAdded = status?.is_open && dessert.is_available;
+  const canBeAdded = !isLoading && status?.is_open && dessert.is_available;
 
   const handleAddToCart = () => {
     if (!canBeAdded) return;
@@ -34,8 +38,9 @@ const DessertCard = ({ dessert }: DessertCardProps) => {
     <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 relative">
       <Toaster position="bottom-center" />
 
+      {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
       {/* Overlay de "LOJA FECHADA" */}
-      {!status?.is_open && (
+      {isStoreClosed && (
         <div className="absolute inset-0 bg-black bg-opacity-60 z-10 flex items-center justify-center">
           <span className="text-white font-bold text-lg">LOJA FECHADA</span>
         </div>
@@ -52,7 +57,6 @@ const DessertCard = ({ dessert }: DessertCardProps) => {
       </div>
       <div className="p-4 flex-grow flex flex-col">
         <h3 className="text-lg font-bold mb-2">{dessert.name}</h3>
-        {/* Adicionado a descrição da sobremesa */}
         <p className="text-gray-600 text-sm mb-4 flex-grow">{dessert.description}</p>
         <div className="flex justify-between items-center mt-auto">
           <span className="text-xl font-bold text-brand-red">{formattedPrice}</span>
@@ -61,7 +65,8 @@ const DessertCard = ({ dessert }: DessertCardProps) => {
             disabled={!canBeAdded}
             className="bg-brand-red hover:bg-brand-red-dark text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            Adicionar
+            {/* --- 3. CORREÇÃO APLICADA AQUI --- */}
+            {isLoading ? 'Aguarde...' : 'Adicionar'}
           </button>
         </div>
       </div>
