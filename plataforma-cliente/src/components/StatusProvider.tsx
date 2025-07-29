@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// 1. CORREÇÃO: Importar diretamente da biblioteca do Supabase
 import { createClient } from '@supabase/supabase-js';
 import type { PizzeriaStatus } from '@/lib/api';
 
@@ -12,32 +11,31 @@ export interface StatusContextType {
 
 const StatusContext = createContext<StatusContextType | undefined>(undefined);
 
+// --- CORREÇÃO APLICADA AQUI ---
+// O cliente Supabase é criado FORA do componente.
+// Isto garante que ele seja criado apenas UMA VEZ quando o ficheiro é carregado, e não a cada renderização.
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export function StatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PizzeriaStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 2. CORREÇÃO: Inicializar o cliente Supabase aqui
-  // Certifique-se de que as suas variáveis de ambiente .env.local estão corretas
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Já não precisamos de criar o cliente aqui dentro.
 
   useEffect(() => {
-    // Esta função agora busca o status diretamente do Supabase, em vez da nossa API.
     const fetchInitialStatus = async () => {
       setIsLoading(true);
       try {
-        // A chamada vai diretamente à tabela 'pizzeria_status'
         const { data, error } = await supabase
           .from('pizzeria_status')
           .select('*')
-          .eq('id', 1) // Supondo que o status tenha sempre o id 1
+          .eq('id', 1)
           .single();
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         if (data) {
           setStatus(data);
@@ -52,7 +50,6 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
     fetchInitialStatus();
 
-    // A lógica do Realtime continua a mesma, pois já falava diretamente com o Supabase.
     const channel = supabase
       .channel('realtime-status-pizzeria')
       .on(
@@ -73,8 +70,8 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  // 3. CORREÇÃO: Adicionar supabase ao array de dependências
-  }, [supabase]);
+  // A dependência 'supabase' é removida porque agora é uma constante estável que não muda entre renderizações.
+  }, []);
 
   const value = { isLoading, status };
 
