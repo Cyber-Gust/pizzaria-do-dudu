@@ -1,32 +1,29 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// 1. CORREÇÃO: Importar diretamente da biblioteca do Supabase
 import { createClient } from '@supabase/supabase-js';
-import type { PizzeriaStatus } from '@/lib/api'; // Importa a tipagem que já temos
+import type { PizzeriaStatus } from '@/lib/api';
 
-// Criação do Contexto
 const StatusContext = createContext<PizzeriaStatus | null>(null);
 
-// Componente Provedor ATUALIZADO
 export function StatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PizzeriaStatus | null>(null);
 
-  // 2. CORREÇÃO: Inicializar o cliente Supabase aqui
-  // Certifique-se de que as suas variáveis de ambiente .env.local estão corretas
+  // Inicializa o cliente Supabase com as suas variáveis de ambiente
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
   useEffect(() => {
-    // Função para buscar o status inicial quando o cliente abre a página
+    // 1. Função para buscar o status inicial ao carregar a página
     const fetchInitialStatus = async () => {
       try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/status`);
         if (response.ok) {
           const data = await response.json();
           setStatus(data);
+          console.log("Status inicial da loja carregado:", data);
         } else {
           console.error('Falha ao buscar o status inicial da pizzaria.');
         }
@@ -37,7 +34,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
     fetchInitialStatus();
 
-    // Lógica do Realtime para ouvir por atualizações
+    // 2. Lógica do Realtime para ouvir por atualizações futuras
     const channel = supabase
       .channel('realtime-status-pizzeria')
       .on(
@@ -58,8 +55,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  // 3. CORREÇÃO: Adicionar supabase ao array de dependências
-  }, [supabase]);
+  }, [supabase]); // Adicionado supabase como dependência
 
   return (
     <StatusContext.Provider value={status}>
