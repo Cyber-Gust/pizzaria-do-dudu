@@ -15,7 +15,6 @@ interface HeroSectionProps {
 }
 
 const HeroSection = ({ operatingHours }: HeroSectionProps) => {
-  // --- 1. CORREÇÃO APLICADA AQUI ---
   // Agora obtemos o isLoading e o status do nosso hook.
   const { isLoading, status } = useStatus();
   const { isAuthenticated, name } = useUserStore();
@@ -92,7 +91,6 @@ const HeroSection = ({ operatingHours }: HeroSectionProps) => {
                 <Info size={16} />
               </button>
 
-              {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
               {/* Esta é a nova lógica de exibição que lida com o estado de carregamento. */}
               {isLoading ? (
                 <div className="flex items-center gap-2 font-bold px-3 py-1 rounded-full bg-gray-500">

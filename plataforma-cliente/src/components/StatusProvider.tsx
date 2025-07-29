@@ -1,49 +1,58 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// 1. CORREÇÃO: Importar diretamente da biblioteca do Supabase
 import { createClient } from '@supabase/supabase-js';
 import type { PizzeriaStatus } from '@/lib/api';
 
-// 1. A tipagem do contexto agora inclui um estado de carregamento
 export interface StatusContextType {
   isLoading: boolean;
   status: PizzeriaStatus | null;
 }
 
-// O contexto agora irá fornecer um objeto com o status e o estado de carregamento
 const StatusContext = createContext<StatusContextType | undefined>(undefined);
 
 export function StatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<PizzeriaStatus | null>(null);
-  // 2. Adicionamos um estado para controlar o carregamento inicial
   const [isLoading, setIsLoading] = useState(true);
 
+  // 2. CORREÇÃO: Inicializar o cliente Supabase aqui
+  // Certifique-se de que as suas variáveis de ambiente .env.local estão corretas
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
   useEffect(() => {
+    // Esta função agora busca o status diretamente do Supabase, em vez da nossa API.
     const fetchInitialStatus = async () => {
-      setIsLoading(true); // Garante que estamos em modo de carregamento
+      setIsLoading(true);
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/status`);
-        if (response.ok) {
-          const data = await response.json();
+        // A chamada vai diretamente à tabela 'pizzeria_status'
+        const { data, error } = await supabase
+          .from('pizzeria_status')
+          .select('*')
+          .eq('id', 1) // Supondo que o status tenha sempre o id 1
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
           setStatus(data);
-        } else {
-          console.error('Falha ao buscar o status inicial da pizzaria.');
+          console.log("Status inicial da loja carregado diretamente do Supabase:", data);
         }
       } catch (error) {
-        console.error('Erro de rede ao buscar status:', error);
+        console.error('Falha ao buscar o status inicial da pizzaria no Supabase:', error);
       } finally {
-        // 3. Quando a busca termina (com sucesso ou erro), paramos o carregamento
         setIsLoading(false);
       }
     };
 
     fetchInitialStatus();
 
+    // A lógica do Realtime continua a mesma, pois já falava diretamente com o Supabase.
     const channel = supabase
       .channel('realtime-status-pizzeria')
       .on(
@@ -56,7 +65,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
         (payload) => {
           console.log('Status da loja atualizado em tempo real!', payload.new);
           setStatus(payload.new as PizzeriaStatus);
-          setIsLoading(false); // Uma atualização em tempo real também significa que não estamos mais a carregar
+          setIsLoading(false);
         }
       )
       .subscribe();
@@ -64,9 +73,9 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
+  // 3. CORREÇÃO: Adicionar supabase ao array de dependências
   }, [supabase]);
 
-  // 4. Fornecemos tanto o status quanto o estado de carregamento para os componentes-filho
   const value = { isLoading, status };
 
   return (
@@ -76,7 +85,6 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// O hook agora retorna o objeto completo
 export const useStatus = () => {
   const context = useContext(StatusContext);
   if (context === undefined) {

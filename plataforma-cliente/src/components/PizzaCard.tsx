@@ -8,15 +8,10 @@ import { Toaster } from 'react-hot-toast';
 import PizzaCustomizationModal from './PizzaCustomizationModal';
 
 const PizzaCard = ({ pizza }: { pizza: Pizza }) => {
-  // --- 1. CORREÇÃO APLICADA AQUI ---
-  // Obtemos o isLoading e o status do nosso hook atualizado.
   const { isLoading, status } = useStatus();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // A loja só está "fechada" se não estiver a carregar E o status for 'is_open: false'.
   const isStoreClosed = !isLoading && status && !status.is_open;
-  
-  // O botão de adicionar fica desativado enquanto carrega OU se a loja estiver fechada.
   const canBeAdded = !isLoading && status?.is_open && pizza.is_available;
 
   const formattedPrice = new Intl.NumberFormat('pt-BR', {
@@ -26,18 +21,13 @@ const PizzaCard = ({ pizza }: { pizza: Pizza }) => {
   return (
     <>
       <PizzaCustomizationModal pizza={pizza} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-      
       <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 relative">
         <Toaster position="bottom-center" />
-        
-        {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
-        {/* O overlay agora só aparece se a loja estiver de facto fechada. */}
         {isStoreClosed && (
           <div className="absolute inset-0 bg-black bg-opacity-60 z-10 flex items-center justify-center">
             <span className="text-white font-bold text-lg">LOJA FECHADA</span>
           </div>
         )}
-
         <div className="relative w-full h-56">
           <Image
             src={pizza.image_url || '/images/hero-background.jpg'}
@@ -59,8 +49,6 @@ const PizzaCard = ({ pizza }: { pizza: Pizza }) => {
               disabled={!canBeAdded}
               className="bg-brand-red hover:bg-brand-red-dark text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {/* --- 3. CORREÇÃO APLICADA AQUI --- */}
-              {/* O texto do botão muda durante o carregamento. */}
               {isLoading ? 'Aguarde...' : 'Customizar'}
             </button>
           </div>

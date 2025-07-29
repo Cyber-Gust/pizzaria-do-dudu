@@ -12,20 +12,13 @@ interface DessertCardProps {
 
 const DessertCard = ({ dessert }: DessertCardProps) => {
   const addItem = useCartStore((state) => state.addItem);
-  // --- 1. CORREÇÃO APLICADA AQUI ---
   const { isLoading, status } = useStatus();
 
-  // A loja só está "fechada" se não estiver a carregar E o status for 'is_open: false'.
   const isStoreClosed = !isLoading && status && !status.is_open;
-
-  // A sobremesa pode ser adicionada se a loja estiver aberta e o item estiver disponível.
   const canBeAdded = !isLoading && status?.is_open && dessert.is_available;
 
   const handleAddToCart = () => {
     if (!canBeAdded) return;
-    
-    // Adicionamos a sobremesa ao carrinho. Como sobremesas não têm extras,
-    // passamos um array vazio como segundo argumento para a função addItem.
     addItem(dessert, []);
     toast.success(`${dessert.name} adicionado ao carrinho!`);
   };
@@ -37,18 +30,14 @@ const DessertCard = ({ dessert }: DessertCardProps) => {
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 relative">
       <Toaster position="bottom-center" />
-
-      {/* --- 2. CORREÇÃO APLICADA AQUI --- */}
-      {/* Overlay de "LOJA FECHADA" */}
       {isStoreClosed && (
         <div className="absolute inset-0 bg-black bg-opacity-60 z-10 flex items-center justify-center">
           <span className="text-white font-bold text-lg">LOJA FECHADA</span>
         </div>
       )}
-
       <div className="relative w-full h-56">
         <Image
-          src={dessert.image_url || '/images/default-dessert.png'} // Imagem padrão para sobremesas
+          src={dessert.image_url || '/images/default-dessert.png'}
           alt={dessert.name}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -65,7 +54,6 @@ const DessertCard = ({ dessert }: DessertCardProps) => {
             disabled={!canBeAdded}
             className="bg-brand-red hover:bg-brand-red-dark text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {/* --- 3. CORREÇÃO APLICADA AQUI --- */}
             {isLoading ? 'Aguarde...' : 'Adicionar'}
           </button>
         </div>
