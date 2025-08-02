@@ -198,18 +198,29 @@ export default function CardapioPage() {
         <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Pizzas</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pizzas.map(pizza => (
-            <div key={pizza.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <Image src={pizza.image_url || 'https://placehold.co/600x400?text=Pizza'} alt={pizza.name} width={600} height={400} className="w-full h-48 object-cover" />
-              <div className="p-4">
-                <h3 className="text-xl font-bold">{pizza.name}</h3>
-                <p className="text-gray-600 text-sm mb-2 h-10 overflow-hidden">{pizza.description}</p>
-                <p className="text-lg font-semibold text-green-600">R$ {pizza.price.toFixed(2)}</p>
-                <div className="mt-4 flex justify-end space-x-2">
-                  <button onClick={() => handleOpenPizzaModal(pizza)} className="text-sm text-blue-600">Editar</button>
-                  <button onClick={() => handleDeletePizza(pizza.id)} className="text-sm text-red-600">Apagar</button>
+            // --- INÍCIO DA MUDANÇA ---
+            <div key={pizza.id} className="relative">
+              {/* Adiciona uma sobreposição e um aviso se a pizza estiver indisponível */}
+              {!pizza.is_available && (
+                <div className="absolute inset-0 bg-gray-500 bg-opacity-70 z-10 flex items-center justify-center rounded-lg">
+                  <span className="text-white font-bold text-lg bg-red-600 px-4 py-1 rounded">INDISPONÍVEL</span>
+                </div>
+              )}
+              {/* O card da pizza em si fica com a opacidade reduzida */}
+              <div className={`bg-white rounded-lg shadow-md overflow-hidden transition-opacity ${!pizza.is_available ? 'opacity-60' : ''}`}>
+                <Image src={pizza.image_url || 'https://placehold.co/600x400?text=Pizza'} alt={pizza.name} width={600} height={400} className="w-full h-48 object-cover" />
+                <div className="p-4">
+                  <h3 className="text-xl font-bold">{pizza.name}</h3>
+                  <p className="text-gray-600 text-sm mb-2 h-10 overflow-hidden">{pizza.description}</p>
+                  <p className="text-lg font-semibold text-green-600">R$ {pizza.price.toFixed(2)}</p>
+                  <div className="mt-4 flex justify-end space-x-2">
+                    <button onClick={() => handleOpenPizzaModal(pizza)} className="text-sm text-blue-600">Editar</button>
+                    <button onClick={() => handleDeletePizza(pizza.id)} className="text-sm text-red-600">Apagar</button>
+                  </div>
                 </div>
               </div>
             </div>
+            // --- FIM DA MUDANÇA ---
           ))}
         </div>
       </section>
