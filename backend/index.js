@@ -801,24 +801,34 @@ app.delete('/api/coupons/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Erro ao apagar cupão.' }); }
 });
 
-app.post('/api/coupons/validate', async (req, res) => {
-    const { code } = req.body;
-    if (!code) {
-        return res.status(400).json({ error: 'O código do cupom é obrigatório.' });
+app.get('/api/coupons/validate/:code', async (req, res) => {
+  const { code } = req.params; // Pega o código do URL
+  
+  if (!code) {
+    return res.status(400).json({ error: 'O código do cupom é obrigatório.' });
+  }
+
+  try {
+    const { data: coupon, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .eq('code', code.toUpperCase())
+      .single();
+
+    if (error || !coupon) {
+      return res.status(404).json({ error: 'Cupom inválido ou não encontrado.' });
     }
-    try {
-        const { data: coupon, error } = await supabase.from('coupons').select('*').eq('code', code.toUpperCase()).single();
-        if (error || !coupon) {
-            return res.status(404).json({ error: 'Cupom inválido ou não encontrado.' });
-        }
-        if (!coupon.is_active) {
-            return res.status(400).json({ error: 'Este cupom não está mais ativo.' });
-        }
-        res.status(200).json(coupon);
-    } catch (err) {
-        console.error('Erro ao validar cupom:', err);
-        res.status(500).json({ error: 'Erro interno ao validar o cupom.' });
+
+    if (!coupon.is_active) {
+      return res.status(400).json({ error: 'Este cupom não está mais ativo.' });
     }
+
+    res.status(200).json(coupon);
+
+  } catch (err) {
+    console.error('Erro ao validar cupom:', err);
+    res.status(500).json({ error: 'Erro interno ao validar o cupom.' });
+  }
 });
 
 // --- ROTAS DE HORÁRIO DE FUNCIONAMENTO ---
