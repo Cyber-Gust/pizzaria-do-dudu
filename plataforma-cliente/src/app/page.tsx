@@ -10,7 +10,7 @@ export default async function HomePage() {
   const operatingHours = await getOperatingHours();
   
   // Pega as 4 primeiras pizzas para serem os destaques
-  const featuredPizzas = allPizzas.slice(0, 4); ok
+  const featuredPizzas = allPizzas.slice(0, 4); 
 
   return (
     <>
