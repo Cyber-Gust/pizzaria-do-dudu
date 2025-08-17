@@ -1,4 +1,4 @@
-// src/app/layout.tsx
+// src/bem/layout.tsx
 
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
